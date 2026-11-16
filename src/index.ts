@@ -12,9 +12,10 @@ export default Plugin.define({
   id: PLUGIN_ID,
   async setup(ctx) {
     const config = parseConnectorConfig(ctx.options)
+    let cleanupProvider: (() => Promise<void>) | undefined
 
     if (config.registerProvider) {
-      await registerAgyProvider(ctx, config)
+      cleanupProvider = await registerAgyProvider(ctx, config)
     }
 
     if (config.registerTool) {
@@ -22,5 +23,7 @@ export default Plugin.define({
     }
 
     await registerPluginAssets(ctx, config)
+
+    return cleanupProvider
   },
 })

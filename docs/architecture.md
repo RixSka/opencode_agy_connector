@@ -1,6 +1,6 @@
 # Architecture
 
-`opencode_agy_connector` exposes Antigravity (`agy` CLI) through four coordinated layers inside a single OpenCode v2 plugin (`id: "agy"`):
+`opencode_agy_connector` exposes Antigravity (`agy` CLI) through five coordinated layers inside a single OpenCode v2 plugin (`id: "agy"`):
 
 1. **Native AI SDK v3 Model Provider (`src/provider.ts`)**
    - Registers provider `agy` (`package: "aisdk:agy-local"`) via `ctx.provider.transform`.
@@ -21,7 +21,11 @@
 4. **Bundled Skill & Commands (`src/assets.ts`, `src/context.ts`, `src/skill-doc.ts`)**
    - Reads `skills/agy/SKILL.md` from the package and registers it via `ctx.skill.transform` when no higher-precedence global or project `agy` skill exists.
    - Registers `/agy` via `ctx.command.transform`, switching the active session model to `agy/<defaultModel>#<defaultVariant>` before submitting the prompt.
-   - Registers `/context` (and intercepts `/context` turns directly inside `doStream` when on `agy/*` models) to parse `~/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript.jsonl` + `agy -p "/usage" --output-format json`, rendering the real context breakdown and synchronizing OpenCode's session context counters without invoking an LLM turn.
+   - Registers `/context` and `/usage` (and intercepts them directly inside `doStream` when on `agy/*` models) to parse `~/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript.jsonl` + `agy -p "/usage"` + `agy -p "/credits"` + `agy models`, rendering the real context breakdown, plan status, and initialized model catalog without invoking an LLM turn.
+
+5. **Right-Sidebar TUI Widget & RPC (`src/tui.ts`, `src/tui-format.ts`, `src/rpc.ts`)**
+   - Server registers `AgyUsageRpc` (`getUsage` method + `updated` event) so any TUI client can query or subscribe to live quota updates without blocking turns.
+   - `./tui` mounts an **Antigravity Quota** section in OpenCode's `sidebar.content` slot showing the plan/credits badge, per-pool quota bars, percentages, reset countdowns, clickable `[↻ Refresh]` trigger, `/agy-refresh` command, event-driven turn updates, and 2-minute background polling.
 
 ## Subprocess Isolation & Cleanup (`src/env.ts`, `src/runner.ts`, `src/output.ts`)
 

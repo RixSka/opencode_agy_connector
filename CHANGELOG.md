@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0 - 2026-11-16
+
+### Added
+- Right-sidebar TUI widget (`./tui` entrypoint exporting to `sidebar.content`) displaying Antigravity plan badge, remaining credits, per-pool quota bars, remaining percentages, reset countdowns, clickable `[↻ Refresh]` header button, `/agy-refresh` palette/slash command, live push updates on turn completion / `/usage`, and 2-minute background polling over a new `AgyUsageRpc` (`./rpc`) contract.
+
 ## 1.1.0 - 2026-11-16
 
 ### Added

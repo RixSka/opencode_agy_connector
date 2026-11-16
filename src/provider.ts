@@ -2,11 +2,13 @@ import { Model, Provider, type Plugin } from "@opencode/plugin"
 import {
   buildAgyContextReport,
   buildAgyUsageReport,
+  buildUsageSnapshotDto,
   consumePendingContextRequest,
   consumePendingUsageRequest,
   discoverPlanCatalog,
   evaluateModelQuotaStatus,
   readAgyTranscriptSummary,
+  type AgyPlanCatalog,
 } from "./context.ts"
 import { buildSanitizedEnv, resolveAgyBinary } from "./env.ts"
 import { buildFailureMessage, inspectControlLine, toV3Usage } from "./output.ts"
@@ -17,6 +19,7 @@ import {
   detectUsageCommandInPrompt,
   extractRelevantInstructions,
 } from "./prompt.ts"
+import { AgyUsageRpc } from "./rpc.ts"
 import { spawnAgyProcess } from "./runner.ts"
 import {
   AGY_MODEL_MAP,
@@ -41,6 +44,7 @@ interface StreamTurnParams {
   readonly timeoutSeconds: number
   readonly abortSignal?: AbortSignal
   readonly onConversationId: (convId?: string) => void
+  readonly onTurnComplete?: () => void
 }
 
 function buildStreamArgs(params: {
@@ -370,6 +374,7 @@ function createStreamingAgyStream(params: StreamTurnParams): ReadableStream<any>
             usage: finalUsage,
           })
           controller.close()
+          params.onTurnComplete?.()
           return
         }
 
@@ -379,6 +384,7 @@ function createStreamingAgyStream(params: StreamTurnParams): ReadableStream<any>
           usage: finalUsage,
         })
         controller.close()
+        params.onTurnComplete?.()
       })
     },
   })
@@ -388,11 +394,12 @@ function createStreamingAgyStream(params: StreamTurnParams): ReadableStream<any>
 export async function registerAgyProvider(
   ctx: Plugin.Context,
   config: AgyConnectorConfig,
-): Promise<void> {
+): Promise<() => Promise<void>> {
   const workspaceDir = ctx.location.directory
   const activeConversations = new Map<string, string>()
   const lastSessionAgents = new Map<string, string>()
   const providerID = Provider.ID.make(PROVIDER_ID)
+  const disposers: Array<{ dispose?: () => Promise<void> | void }> = []
   const startupEnv = buildSanitizedEnv()
   const startupAgyBin = resolveAgyBinary(config.binaryPath, startupEnv)
   let currentCatalog = await discoverPlanCatalog(
@@ -401,6 +408,59 @@ export async function registerAgyProvider(
     startupEnv,
     config.defaultModel,
   )
+  let lastCatalogRefreshAt = Date.now()
+  let pendingRefreshPromise: Promise<AgyPlanCatalog> | null = null
+  let emitUsageUpdate: ((catalog: AgyPlanCatalog) => void) | undefined
+
+  const refreshPlanCatalog = async (force = false): Promise<AgyPlanCatalog> => {
+    if (!force && Date.now() - lastCatalogRefreshAt < 45_000 && currentCatalog.quotaGroups.length > 0) {
+      return currentCatalog
+    }
+    if (pendingRefreshPromise) {
+      return pendingRefreshPromise
+    }
+    pendingRefreshPromise = (async () => {
+      try {
+        const env = buildSanitizedEnv()
+        const agyBin = resolveAgyBinary(config.binaryPath, env)
+        const next = await discoverPlanCatalog(agyBin, workspaceDir, env, config.defaultModel)
+        if (next.quotaGroups.length > 0 || currentCatalog.quotaGroups.length === 0) {
+          currentCatalog = next
+          lastCatalogRefreshAt = Date.now()
+          void ctx.model.reload().catch(() => {})
+          emitUsageUpdate?.(currentCatalog)
+        }
+        return currentCatalog
+      } finally {
+        pendingRefreshPromise = null
+      }
+    })()
+    return pendingRefreshPromise
+  }
+
+  if (ctx.rpc) {
+    try {
+      const registration = await ctx.rpc.register(AgyUsageRpc, {
+        getUsage: async (input) => {
+          const force = Boolean((input as { forceRefresh?: boolean } | undefined)?.forceRefresh)
+          const catalog = await refreshPlanCatalog(force)
+          return {
+            json: JSON.stringify(buildUsageSnapshotDto(catalog)),
+          }
+        },
+      })
+      disposers.push(registration)
+      emitUsageUpdate = (catalog) => {
+        void registration.events
+          .emit("updated", {
+            json: JSON.stringify(buildUsageSnapshotDto(catalog)),
+          })
+          .catch(() => {})
+      }
+    } catch {
+      // RPC registration is optional if the host does not support it
+    }
+  }
 
   await ctx.provider.transform((editor) => {
     const info = {
@@ -522,7 +582,9 @@ export async function registerAgyProvider(
             preferredDefaultModel: config.defaultModel,
           })
           currentCatalog = catalog
+          lastCatalogRefreshAt = Date.now()
           void ctx.model.reload().catch(() => {})
+          emitUsageUpdate?.(currentCatalog)
 
           const existingSummary = readAgyTranscriptSummary(prevConvId)
           const syncUsage = existingSummary?.latestStep
@@ -611,6 +673,10 @@ export async function registerAgyProvider(
             activeConversations.set(sessionID, convId)
             void ctx.storage.set(`agy:conv:${sessionID}`, convId).catch(() => {})
           },
+          onTurnComplete: () => {
+            if (!isPrimary) return
+            void refreshPlanCatalog(true).catch(() => {})
+          },
         })
 
         return { stream }
@@ -665,4 +731,14 @@ export async function registerAgyProvider(
     },
     { providerID: PROVIDER_ID },
   )
+
+  return async () => {
+    for (const d of disposers) {
+      try {
+        await d.dispose?.()
+      } catch {
+        // ignore
+      }
+    }
+  }
 }

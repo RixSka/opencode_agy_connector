@@ -929,3 +929,42 @@ export async function buildAgyUsageReport(params: {
     catalog,
   }
 }
+
+/** Serialize an `AgyPlanCatalog` into a compact DTO for the TUI right-sidebar widget. */
+export function buildUsageSnapshotDto(catalog: AgyPlanCatalog): {
+  readonly planTier: string
+  readonly remainingCredits: number | null
+  readonly quotaGroups: readonly {
+    readonly modelGroup: string
+    readonly window: string
+    readonly remainingPct: number
+    readonly resetUtc: string
+  }[]
+  readonly updatedAt: string
+} {
+  const quotaGroups: {
+    readonly modelGroup: string
+    readonly window: string
+    readonly remainingPct: number
+    readonly resetUtc: string
+  }[] = []
+
+  for (const group of catalog.quotaGroups) {
+    for (const bucket of group.buckets) {
+      quotaGroups.push({
+        modelGroup: group.name,
+        window: bucket.window ?? bucket.name,
+        remainingPct: Math.max(0, Math.min(100, Math.round(bucket.remainingFraction * 100))),
+        resetUtc: bucket.resetTime ?? "",
+      })
+    }
+  }
+
+  return {
+    planTier: catalog.planTier,
+    remainingCredits: catalog.remainingCredits ?? null,
+    quotaGroups,
+    updatedAt: new Date().toISOString(),
+  }
+}
+

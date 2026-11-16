@@ -1,6 +1,6 @@
 {
   "name": "opencode_agy_connector",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "OpenCode v2 connector for Antigravity (agy): native agy/* model provider, standalone /agy command, bundled @agy skill, and agy delegation tool.",
   "license": "MIT",
@@ -9,7 +9,9 @@
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./server": "./src/index.ts"
+    "./server": "./src/index.ts",
+    "./tui": "./src/tui.ts",
+    "./rpc": "./src/rpc.ts"
   },
   "files": [
     "src",
@@ -45,10 +47,27 @@
     "check": "npm run typecheck && npm test"
   },
   "peerDependencies": {
-    "@opencode/plugin": ">=2.3.0 <3"
+    "@opencode/plugin": ">=2.3.0 <3",
+    "@opentui/core": ">=0.8.0",
+    "@opentui/solid": ">=0.8.0",
+    "solid-js": ">=1.9.0"
+  },
+  "peerDependenciesMeta": {
+    "@opentui/core": {
+      "optional": true
+    },
+    "@opentui/solid": {
+      "optional": true
+    },
+    "solid-js": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@opencode/plugin": "2.3.0",
-    "@types/node": "^24.0.0"
+    "@opentui/core": "0.8.4",
+    "@opentui/solid": "0.8.4",
+    "@types/node": "^24.0.0",
+    "solid-js": "1.9.17"
   }
 }
