@@ -16,8 +16,8 @@ test("bundled skills/agy/SKILL.md parses frontmatter and markdown body cleanly",
 test("parseConnectorConfig normalizes options with safe fallbacks", () => {
   const defaults = parseConnectorConfig(undefined)
   assert.equal(defaults.defaultModel, "gemini-4-hydrogen")
-  assert.equal(defaults.defaultVariant, "xhigh")
-  assert.equal(defaults.defaultToolModel, "gemini-4-hydrogen-xhigh")
+  assert.equal(defaults.defaultVariant, "medium")
+  assert.equal(defaults.defaultToolModel, "gemini-4-hydrogen-medium")
   assert.equal(defaults.timeoutSeconds, 600)
   assert.equal(defaults.allowAllTools, false)
   assert.equal(defaults.registerProvider, true)
@@ -47,7 +47,7 @@ test("parseConnectorConfig normalizes options with safe fallbacks", () => {
 
 test("resolveProviderCliModel maps variants and single-variant models accurately", () => {
   assert.equal(resolveProviderCliModel("gemini-4-hydrogen", "high"), "gemini-4-hydrogen-high")
-  assert.equal(resolveProviderCliModel("gemini-4-hydrogen"), "gemini-4-hydrogen-xhigh")
+  assert.equal(resolveProviderCliModel("gemini-4-hydrogen"), "gemini-4-hydrogen-medium")
   assert.equal(resolveProviderCliModel("gemini-pro-orchestrator-g1-pro", "high"), "gemini-pro-orchestrator-g1-pro")
   assert.equal(resolveProviderCliModel("gpt-oss-120b-medium"), "gpt-oss-120b-medium")
 })

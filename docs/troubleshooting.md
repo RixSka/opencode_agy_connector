@@ -74,7 +74,7 @@ Test the underlying CLI directly outside OpenCode to distinguish CLI/account iss
 
 ```bash
 agy models
-agy --output-format json --model gemini-4-hydrogen-xhigh -p "Reply with OK"
+agy --output-format json --model gemini-4-hydrogen-medium -p "Reply with OK"
 ```
 
 If `agy` is unauthenticated, run `agy` interactively in a terminal to complete login.
@@ -85,6 +85,6 @@ If `agy` is unauthenticated, run `agy` interactively in a terminal to complete l
 
 In OpenCode v2, top-level `opencode` does not accept `--model`:
 
-- Use `opencode mini -m agy/gemini-4-hydrogen#xhigh` for a quick TUI session directly on Antigravity.
-- Use `opencode run -m agy/gemini-4-hydrogen#xhigh "<prompt>"` for non-interactive runs.
-- Inside full `opencode`, switch with `/models`, run `/agy <task>`, or set `"model": "agy/gemini-4-hydrogen#xhigh"` in `opencode.jsonc`.
+- Use `opencode mini -m agy/gemini-4-hydrogen#medium` for a quick TUI session directly on Antigravity.
+- Use `opencode run -m agy/gemini-4-hydrogen#medium "<prompt>"` for non-interactive runs.
+- Inside full `opencode`, switch with `/models`, run `/agy <task>`, or set `"model": "agy/gemini-4-hydrogen#medium"` in `opencode.jsonc`.

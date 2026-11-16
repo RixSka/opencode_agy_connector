@@ -1,6 +1,6 @@
 {
   "name": "opencode_agy_connector",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "OpenCode v2 connector for Antigravity (agy): native agy/* model provider, standalone /agy command, bundled @agy skill, and agy delegation tool.",
   "license": "MIT",

@@ -7,7 +7,7 @@ OpenCode v2 connector plugin that registers **Antigravity (`agy`)** as a first-c
 ## Features
 
 - **Standalone `agy/*` Model Provider:** Exposes 7 Antigravity model families and effort variants (`#low`, `#medium`, `#high`, `#xhigh`) natively inside OpenCode's model picker, `opencode mini -m`, and `opencode run -m`.
-- **Direct `/agy` Command:** Programmatically registered command that switches straight to `agy/gemini-4-hydrogen#xhigh` (configurable) without sending an intermediate turn to another provider.
+- **Direct `/agy` Command:** Programmatically registered command that switches straight to `agy/gemini-4-hydrogen#medium` (configurable) without sending an intermediate turn to another provider.
 - **Bundled `@agy` Skill:** Automatically loads [`skills/agy/SKILL.md`](./skills/agy/SKILL.md) into OpenCode when no user-defined override is present.
 - **Explicit `agy` Delegation Tool:** Lets non-Antigravity sessions offload heavy multi-file refactors, test generation, PDF inspection, or independent reviews to headless `agy -p`.
 - **Streaming Tools & Session Continuity:** Streams NDJSON tool calls (`providerExecuted: true`), forwards `AGENTS.md` + active OpenCode agent role prompts, stages binary/file attachments, generates titles without spawning extra LLM calls, enforces read-only constraints on `plan`/`reviewer`/`explore`, and resumes multi-turn sessions via `--conversation`.
@@ -72,7 +72,7 @@ Or with explicit options:
       "package": "github:RixSka/opencode_agy_connector",
       "options": {
         "defaultModel": "gemini-4-hydrogen",
-        "defaultVariant": "xhigh",
+        "defaultVariant": "medium",
         "timeoutSeconds": 600,
         "allowAllTools": false
       }
@@ -97,7 +97,7 @@ If your OpenCode config uses `"policies"` to deny `"*"`, remember to allow `"agy
 
 ```jsonc
 {
-  "model": "agy/gemini-4-hydrogen#xhigh",
+  "model": "agy/gemini-4-hydrogen#medium",
   "policies": [
     { "action": "provider.use", "resource": "*", "effect": "deny" },
     { "action": "provider.use", "resource": "agy", "effect": "allow" }
@@ -139,20 +139,20 @@ opencode service restart
 
 - **OpenCode Minimal Interactive TUI:**
   ```bash
-  opencode mini -m agy/gemini-4-hydrogen#xhigh
+  opencode mini -m agy/gemini-4-hydrogen#medium
   ```
 - **Headless / Scripted OpenCode Run:**
   ```bash
-  opencode run -m agy/gemini-4-hydrogen#xhigh "Inspect src/ and list public APIs"
+  opencode run -m agy/gemini-4-hydrogen#medium "Inspect src/ and list public APIs"
   ```
 - **Inside Full OpenCode TUI (`opencode`):**
   - Select any `agy/*` model via `/models`.
-  - Or run `/agy <task>` directly (switches the turn onto `agy/gemini-4-hydrogen#xhigh` immediately without calling another model).
+  - Or run `/agy <task>` directly (switches the turn onto `agy/gemini-4-hydrogen#medium` immediately without calling another model).
 - **Standalone Antigravity Terminal CLI (No OpenCode):**
   ```bash
   agy
   agy -i "Refactor module"
-  agy --model gemini-4-hydrogen-xhigh -p "Explain package.json scripts"
+  agy --model gemini-4-hydrogen-medium -p "Explain package.json scripts"
   ```
 
 ---

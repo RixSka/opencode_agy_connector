@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1 - 2026-11-16
+
+### Changed
+- Set `medium` (`gemini-4-hydrogen-medium` / `agy/gemini-4-hydrogen#medium`) as the default effort variant for `gemini-4-hydrogen`, the `/agy` command, the `agy` delegation tool, and the bundled `@agy` skill (`#high` and `#xhigh` remain selectable variants).
+
 ## 1.0.0 - 2026-11-16
 
 ### Added

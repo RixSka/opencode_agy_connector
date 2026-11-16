@@ -1,15 +1,15 @@
 ---
 name: agy
-description: Delegate scoped heavy coding, refactoring, test generation, or deep analysis tasks to the headless Antigravity CLI using Gemini 4 Hydrogen xhigh, or route directly to native agy/* models.
+description: Delegate scoped heavy coding, refactoring, test generation, or deep analysis tasks to the headless Antigravity CLI using Gemini 4 Hydrogen medium, or route directly to native agy/* models.
 ---
 
 # Antigravity CLI (`agy`) Delegation Skill
 
-Delegate heavy, self-contained coding, refactoring, test generation, PDF/multimodal file parsing, or deep analysis tasks to Antigravity (`agy`) running `gemini-4-hydrogen-xhigh` by default.
+Delegate heavy, self-contained coding, refactoring, test generation, PDF/multimodal file parsing, or deep analysis tasks to Antigravity (`agy`) running `gemini-4-hydrogen-medium` by default.
 
 ## Two Ways Antigravity Runs
 
-1. **Direct Native Model (`agy/*` or `/agy <task>`):** Runs directly on `agy/gemini-4-hydrogen#xhigh` (and sibling `agy/*` models) via OpenCode without invoking any intermediary model.
+1. **Direct Native Model (`agy/*` or `/agy <task>`):** Runs directly on `agy/gemini-4-hydrogen#medium` (and sibling `agy/*` models) via OpenCode without invoking any intermediary model.
 2. **Tool Delegation (`agy` tool or headless `agy -p`):** Lets another OpenCode session delegate a scoped task to `agy` while keeping OpenCode's main thread responsive.
 
 ## When to Trigger Delegation
@@ -31,7 +31,7 @@ When `opencode_agy_connector` is active, prefer calling the registered `agy` too
 
 If the `agy` tool is disabled or unavailable, invoke `agy` directly in non-interactive print mode (`-p` / `--print`) from the active project's current working directory (`pwd`). Never launch interactive TUI mode (`agy` without `-p`) inside a non-interactive shell tool.
 
-- **Default model:** `gemini-4-hydrogen-xhigh` (verified `agy models` ID; equivalent CLI flags: `--model gemini-4-hydrogen-xhigh` or `--model gemini-4-hydrogen --effort xhigh`). Do not switch models or lower reasoning effort unless the user explicitly asks.
+- **Default model:** `gemini-4-hydrogen-medium` (verified `agy models` ID; equivalent CLI flags: `--model gemini-4-hydrogen-medium` or `--model gemini-4-hydrogen --effort medium`). Do not switch models or lower reasoning effort unless the user explicitly asks.
 - **Workspace scope:** Run inside the current working directory (`pwd`). Only pass `add_dirs` / `--add-dir <path>` when the task explicitly spans an outside directory.
 
 ```bash
@@ -40,7 +40,7 @@ PROMPT=$(cat <<'EOF'
 EOF
 )
 
-agy -p "$PROMPT" --model gemini-4-hydrogen-xhigh --output-format json --print-timeout 600s
+agy -p "$PROMPT" --model gemini-4-hydrogen-medium --output-format json --print-timeout 600s
 ```
 
 ### 2. Choose Headless Permission & Output Flags Deliberately
@@ -85,7 +85,7 @@ Both `--output-format json` and the `agy` tool return a `conversation_id` (even 
 - **When to resume:** Only when continuing a partial multi-step refactor or recovering from a timeout (`DEADLINE_EXCEEDED` / `print_timeout`) where a `conversation_id` was returned.
 - **How to resume:** Pass `conversation_id` to the `agy` tool, or run:
   ```bash
-  agy --conversation "<conversation_id>" -p "<next-step or finish-up instructions>" --model gemini-4-hydrogen-xhigh --output-format json
+  agy --conversation "<conversation_id>" -p "<next-step or finish-up instructions>" --model gemini-4-hydrogen-medium --output-format json
   ```
 - Inspect `git status` / `git diff` first so the follow-up prompt accounts for edits already written before the timeout.
 

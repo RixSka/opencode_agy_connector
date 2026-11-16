@@ -11,7 +11,7 @@ Add to `~/.config/opencode/opencode.jsonc` or a repository's `.opencode/opencode
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "agy/gemini-4-hydrogen#xhigh",
+  "model": "agy/gemini-4-hydrogen#medium",
   "policies": [
     { "action": "provider.use", "resource": "*", "effect": "deny" },
     { "action": "provider.use", "resource": "agy", "effect": "allow" }
@@ -35,7 +35,7 @@ If you previously configured `"agents"` entries pointing to another provider (fo
 }
 ```
 
-Even when another default provider hits a quota limit or is unavailable, `agy/*` stays reachable via `/models`, `/agy <task>`, `opencode mini -m agy/gemini-4-hydrogen#xhigh`, and `opencode run -m agy/gemini-4-hydrogen#xhigh "<prompt>"`.
+Even when another default provider hits a quota limit or is unavailable, `agy/*` stays reachable via `/models`, `/agy <task>`, `opencode mini -m agy/gemini-4-hydrogen#medium`, and `opencode run -m agy/gemini-4-hydrogen#medium "<prompt>"`.
 
 ---
 
@@ -43,7 +43,7 @@ Even when another default provider hits a quota limit or is unavailable, `agy/*`
 
 | OpenCode Model ID | Variants (`#variant`) | Mapped CLI Model | Default Effort |
 | --- | --- | --- | --- |
-| `agy/gemini-4-hydrogen` | `low`, `medium`, `high`, `xhigh` | `gemini-4-hydrogen-{low,medium,high,xhigh}` | `xhigh` |
+| `agy/gemini-4-hydrogen` | `low`, `medium`, `high`, `xhigh` | `gemini-4-hydrogen-{low,medium,high,xhigh}` | `medium` |
 | `agy/gemini-4-argon` | `low`, `medium`, `high` | `gemini-4-argon-{low,medium,high}` | `high` |
 | `agy/gemini-3.8-flash` | `low`, `medium`, `high` | `gemini-3.8-flash-{low,medium,high}` | `medium` |
 | `agy/gemini-pro-orchestrator-g1-pro` | — | `gemini-pro-orchestrator-g1-pro` | — |
@@ -71,8 +71,8 @@ Pass plugin options in `opencode.jsonc` using the object plugin syntax:
       "options": {
         "binaryPath": "/Users/your-user/.local/bin/agy",
         "defaultModel": "gemini-4-hydrogen",
-        "defaultVariant": "xhigh",
-        "defaultToolModel": "gemini-4-hydrogen-xhigh",
+        "defaultVariant": "medium",
+        "defaultToolModel": "gemini-4-hydrogen-medium",
         "timeoutSeconds": 600,
         "allowAllTools": false,
         "readOnlyAgents": ["plan", "reviewer", "explore"],
@@ -90,8 +90,8 @@ Pass plugin options in `opencode.jsonc` using the object plugin syntax:
 | --- | --- | --- | --- |
 | `binaryPath` | `string` | `undefined` | Explicit path to the `agy` binary. Overrides `AGY_BIN` and `PATH` resolution. |
 | `defaultModel` | `string` | `"gemini-4-hydrogen"` | Default `agy/*` model ID selected when `/agy` runs. |
-| `defaultVariant` | `string` | `"xhigh"` | Effort variant selected by `/agy` when supported by `defaultModel`. |
-| `defaultToolModel` | `string` | Derived (`gemini-4-hydrogen-xhigh`) | Default CLI model passed to `agy -p` by the `agy` delegation tool. |
+| `defaultVariant` | `string` | `"medium"` | Effort variant selected by `/agy` when supported by `defaultModel`. |
+| `defaultToolModel` | `string` | Derived (`gemini-4-hydrogen-medium`) | Default CLI model passed to `agy -p` by the `agy` delegation tool. |
 | `timeoutSeconds` | `number` | `600` | Print timeout in seconds (`0` disables `--print-timeout`). |
 | `allowAllTools` | `boolean` | `false` | Pass `--dangerously-skip-permissions` on primary non-read-only `agy/*` runs so headless shell commands outside `settings.json` are not auto-denied. Ignored on `readOnlyAgents` and background compaction/generate turns. |
 | `readOnlyAgents` | `string[]` | `["plan", "reviewer", "explore"]` | OpenCode agent IDs constrained to read-only execution (`--mode accept-edits` omitted + read-only prompt guardrail). |

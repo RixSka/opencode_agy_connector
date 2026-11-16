@@ -5,7 +5,7 @@ import { PROVIDER_ID, type AgyConnectorConfig } from "./types.ts"
 
 const FALLBACK_SKILL_CONTENT = `# Antigravity CLI (\`agy\`) Delegation Skill
 
-Delegate heavy, self-contained coding, refactoring, test generation, PDF/multimodal file parsing, or deep analysis tasks to the headless Antigravity CLI (\`agy\`) running \`gemini-4-hydrogen-xhigh\` by default.
+Delegate heavy, self-contained coding, refactoring, test generation, PDF/multimodal file parsing, or deep analysis tasks to the headless Antigravity CLI (\`agy\`) running \`gemini-4-hydrogen-medium\` by default.
 
 Prefer calling the registered \`agy\` OpenCode tool when available, or switch directly to \`agy/*\` models via \`/models\` or \`/agy <task>\`.
 `
@@ -30,7 +30,7 @@ export async function registerPluginAssets(
           id: "agy",
           name: "agy",
           description:
-            "Delegate scoped heavy coding, refactoring, test generation, or deep analysis tasks to Antigravity (agy) using Gemini 4 Hydrogen xhigh.",
+            "Delegate scoped heavy coding, refactoring, test generation, or deep analysis tasks to Antigravity (agy) using Gemini 4 Hydrogen medium.",
           content: FALLBACK_SKILL_CONTENT,
         }
 

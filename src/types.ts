@@ -1,8 +1,8 @@
 export const PROVIDER_ID = "agy" as const
 export const PLUGIN_ID = "agy" as const
 export const DEFAULT_MODEL_ID = "gemini-4-hydrogen"
-export const DEFAULT_VARIANT_ID = "xhigh"
-export const DEFAULT_TOOL_MODEL = "gemini-4-hydrogen-xhigh"
+export const DEFAULT_VARIANT_ID = "medium"
+export const DEFAULT_TOOL_MODEL = "gemini-4-hydrogen-medium"
 export const DEFAULT_TIMEOUT_SECONDS = 600
 export const MAX_OUTPUT_BYTES = 100 * 1024
 export const MAX_CAPTURE_BYTES = 2 * 1024 * 1024
@@ -30,7 +30,7 @@ export const AGY_MODEL_SPECS: readonly AgyModelSpec[] = [
     id: "gemini-4-hydrogen",
     name: "Gemini 4 Hydrogen (Antigravity)",
     variants: ["low", "medium", "high", "xhigh"],
-    defaultVariant: "xhigh",
+    defaultVariant: "medium",
   },
   {
     id: "gemini-4-argon",
