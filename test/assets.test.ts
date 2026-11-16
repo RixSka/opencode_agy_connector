@@ -19,6 +19,7 @@ test("parseConnectorConfig normalizes options with safe fallbacks", () => {
   assert.equal(defaults.defaultVariant, "medium")
   assert.equal(defaults.defaultToolModel, "gemini-4-hydrogen-medium")
   assert.equal(defaults.timeoutSeconds, 600)
+  assert.equal(defaults.mode, "accept-edits")
   assert.equal(defaults.allowAllTools, false)
   assert.equal(defaults.registerProvider, true)
   assert.equal(defaults.registerTool, true)
@@ -30,6 +31,7 @@ test("parseConnectorConfig normalizes options with safe fallbacks", () => {
     defaultModel: "gemini-3.8-flash",
     defaultVariant: "low",
     timeoutSeconds: 120,
+    mode: "auto",
     allowAllTools: true,
     readOnlyAgents: ["plan", "audit"],
     registerTool: false,
@@ -39,6 +41,7 @@ test("parseConnectorConfig normalizes options with safe fallbacks", () => {
   assert.equal(custom.defaultVariant, "low")
   assert.equal(custom.defaultToolModel, "gemini-3.8-flash-low")
   assert.equal(custom.timeoutSeconds, 120)
+  assert.equal(custom.mode, "auto")
   assert.equal(custom.allowAllTools, true)
   assert.equal(custom.readOnlyAgents.has("audit"), true)
   assert.equal(custom.readOnlyAgents.has("reviewer"), false)

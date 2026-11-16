@@ -90,12 +90,15 @@ export const AGY_MODEL_MAP: ReadonlyMap<string, AgyModelSpec> = new Map(
   AGY_MODEL_SPECS.map((spec) => [spec.id, spec]),
 )
 
+export type AgyExecutionMode = "accept-edits" | "auto" | "plan"
+
 export interface AgyConnectorConfig {
   readonly binaryPath?: string
   readonly defaultModel: string
   readonly defaultVariant?: string
   readonly defaultToolModel: string
   readonly timeoutSeconds: number
+  readonly mode: AgyExecutionMode
   readonly allowAllTools: boolean
   readonly readOnlyAgents: ReadonlySet<string>
   readonly registerProvider: boolean
@@ -108,7 +111,7 @@ export interface AgyToolInput {
   readonly prompt: string
   readonly model?: string
   readonly effort?: "low" | "medium" | "high" | "xhigh" | "max"
-  readonly mode?: "plan" | "accept-edits" | "default"
+  readonly mode?: "plan" | "accept-edits" | "auto" | "default"
   readonly conversation_id?: string
   readonly timeout_seconds?: number
   readonly allow_all_tools?: boolean
@@ -200,6 +203,10 @@ export function parseConnectorConfig(rawOptions: Record<string, unknown> | undef
       ? Math.max(0, Math.floor(opts.timeoutSeconds))
       : DEFAULT_TIMEOUT_SECONDS
 
+  const rawMode = typeof opts.mode === "string" ? opts.mode.trim() : ""
+  const mode: AgyExecutionMode =
+    rawMode === "auto" || rawMode === "plan" || rawMode === "accept-edits" ? rawMode : "accept-edits"
+
   const extraReadOnly = Array.isArray(opts.readOnlyAgents)
     ? opts.readOnlyAgents
         .filter((entry): entry is string => typeof entry === "string")
@@ -215,6 +222,7 @@ export function parseConnectorConfig(rawOptions: Record<string, unknown> | undef
     defaultVariant,
     defaultToolModel,
     timeoutSeconds,
+    mode,
     allowAllTools: opts.allowAllTools === true,
     readOnlyAgents,
     registerProvider: opts.registerProvider !== false,

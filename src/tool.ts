@@ -71,9 +71,9 @@ export async function registerAgyTool(
           },
           mode: {
             type: "string",
-            enum: ["plan", "accept-edits", "default"],
+            enum: ["plan", "accept-edits", "auto", "default"],
             description:
-              "Execution mode: 'plan' (read-only analysis), 'accept-edits' (non-interactive file writes), or 'default' (omits --mode).",
+              "Execution mode: 'plan' (read-only analysis), 'accept-edits' (non-interactive file writes), 'auto' (automatic mode), or 'default' (omits --mode).",
           },
           conversation_id: {
             type: "string",

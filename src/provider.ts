@@ -30,6 +30,7 @@ import {
   resolveProviderCliModel,
   type AgyConnectorConfig,
   type AgyErrorPayload,
+  type AgyExecutionMode,
   type AgyJsonResult,
   type AgyMeta,
   type AgyUsage,
@@ -52,6 +53,7 @@ function buildStreamArgs(params: {
   readonly cliModel: string
   readonly timeoutSeconds: number
   readonly readOnly: boolean
+  readonly mode: AgyExecutionMode
   readonly allowAllTools: boolean
   readonly prevConvId?: string
   readonly responseSchema?: unknown
@@ -69,7 +71,7 @@ function buildStreamArgs(params: {
   ]
 
   if (!params.readOnly) {
-    args.push("--mode", "accept-edits")
+    args.push("--mode", params.mode)
     if (params.allowAllTools) {
       args.push("--dangerously-skip-permissions")
     }
@@ -656,6 +658,7 @@ export async function registerAgyProvider(
           cliModel,
           timeoutSeconds: config.timeoutSeconds,
           readOnly,
+          mode: config.mode,
           allowAllTools: config.allowAllTools,
           prevConvId,
           responseSchema: options.responseFormat?.type === "json" ? options.responseFormat.schema : undefined,

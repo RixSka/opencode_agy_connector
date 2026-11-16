@@ -12,7 +12,7 @@
    - **`ctx.session.hook("context" | "compaction" | "generate")`:** Extracts custom agent system prompts, `AGENTS.md`, and session instructions (stripping OpenCode-internal harness/environment boilerplate) and forwards them via `event.options.agyMeta`.
    - **Multi-turn continuity:** Tracks `agy` `conversation_id` per OpenCode session (`ctx.storage` keys `agy:conv:<sessionID>` and `agy:agent:<sessionID>`). Subsequent turns pass `--conversation <id>` with only the new delta turn; mid-session switches from another provider replay bounded `<prior_conversation>` turns cleanly.
    - **Attachments:** Converts `file://` URLs and inline binary/base64 image or PDF parts into staged files inside `os.tmpdir()/opencode-agy-attachments` so `agy` file tools can inspect them.
-   - **Read-only guardrails:** Agents listed in `readOnlyAgents` (default: `plan`, `reviewer`, `explore`), plus non-primary compaction/generate turns, omit `--mode accept-edits` and inject strict read-only instructions.
+   - **Read-only guardrails:** Agents listed in `readOnlyAgents` (default: `plan`, `reviewer`, `explore`), plus non-primary compaction/generate turns, omit `--mode` (`config.mode`, default `accept-edits`) and inject strict read-only instructions.
 
 3. **Explicit Delegation Tool (`src/tool.ts`)**
    - Registers the `agy` tool (`ctx.tool.transform`) so non-Antigravity sessions (such as Claude agents) can delegate heavy analyses, refactors, PDF inspection, or test generation to headless `agy -p --output-format json`.

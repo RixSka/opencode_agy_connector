@@ -62,9 +62,9 @@ The background OpenCode daemon may run with a minimal `PATH` that does not inclu
 
 Headless `agy -p` cannot answer interactive approval prompts.
 
-- Under `build` and coding agents, the native `agy/*` provider passes `--mode accept-edits` automatically so file creations and edits succeed without interactive prompts.
+- Under `build` and coding agents, the native `agy/*` provider passes `--mode accept-edits` by default (configurable via `"mode"` in plugin options) so file creations and edits succeed without interactive prompts.
 - Under read-only agents (`plan`, `reviewer`, `explore`), writes remain blocked intentionally.
-- For shell commands inside `agy` (or when delegating with the `agy` tool), commands outside `~/.gemini/antigravity-cli/settings.json` `permissions.allow` are auto-denied unless `"allowAllTools": true` is configured in plugin options (for native `agy/*` coding agents), `allow_all_tools: true` is passed explicitly in the delegation tool call, or matching rules are added to `~/.gemini/antigravity-cli/settings.json`.
+- For shell commands inside `agy` (or when delegating with the `agy` tool), commands outside `~/.gemini/antigravity-cli/settings.json` `permissions.allow` are auto-denied unless `"mode": "auto"` or `"allowAllTools": true` is configured in plugin options (for native `agy/*` coding agents), `mode: "auto"` / `allow_all_tools: true` is passed explicitly in the delegation tool call, or matching rules are added to `~/.gemini/antigravity-cli/settings.json`.
 
 ---
 

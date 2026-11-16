@@ -50,7 +50,7 @@ Headless mode cannot answer interactive confirmation prompts; any unpermitted to
 - **Read-only research / analysis:**
   Leave `mode` omitted or use `mode: "plan"` (`--mode plan`) and state read-only constraints explicitly in the prompt. Note that shell commands outside `permissions.allow` in `~/.gemini/antigravity-cli/settings.json` will still be auto-denied unless explicitly allowed.
 - **File creation, refactoring, or test writing:**
-  Use `mode: "accept-edits"` (`--mode accept-edits`) so `agy` can create and edit workspace files non-interactively.
+  Use `mode: "accept-edits"` (`--mode accept-edits`) so `agy` can create and edit workspace files non-interactively, or `mode: "auto"` (`--mode auto`) when automatic mode is needed.
 - **Full tool execution (only when explicitly appropriate):**
   Only pass `allow_all_tools: true` (`--dangerously-skip-permissions`) when the delegated task requires running shell commands outside `permissions.allow`, and only when safe for the workspace. Never instruct `agy` to run destructive or remote-mutating commands (`git push`, `rm -rf`, etc.) unless the user explicitly asked for them.
 - **Timeouts & slash expansion:**
@@ -97,7 +97,7 @@ Check **both** the exit code and stdout/stderr output on every run. **Never retr
   Stop immediately and surface the exit code, full error message, `AGY_ERROR` details (if present), `conversation_id` (if returned), and any partial output to the user.
 - **Headless permission auto-denial (CLI can exit `0`!):**
   If `agy` prints `no output produced — a tool required the "..." permission that headless mode cannot prompt for`, treat it as a failed/incomplete run. Report the exact blocked permission to the user and either:
-  - re-run with `mode: "accept-edits"` (`--mode accept-edits`) if only file edits were needed,
+  - re-run with `mode: "accept-edits"` (`--mode accept-edits`) if only file edits were needed, or `mode: "auto"` (`--mode auto`) if automatic mode is appropriate,
   - run the blocked verification command directly inside OpenCode instead, or
   - ask the user before passing `allow_all_tools: true` (`--dangerously-skip-permissions`) or updating `~/.gemini/antigravity-cli/settings.json`.
 - **Timeout (`DEADLINE_EXCEEDED` / `print_timeout`):**

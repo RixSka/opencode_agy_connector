@@ -85,6 +85,9 @@ export function buildFailureMessage(
 
   if (parsed.permissionBlocked) {
     parts.push(`agy headless permission auto-denied (exit ${code ?? "null"}): ${parsed.permissionBlocked}`)
+    parts.push(
+      'Hint: Set "mode": "auto" (or "allowAllTools": true) in opencode_agy_connector plugin options in opencode.jsonc, or add a matching allow-rule under permissions.allow in ~/.gemini/antigravity-cli/settings.json.',
+    )
   } else if (timedOut) {
     parts.push("agy exceeded the hard process timeout and was terminated.")
   } else {

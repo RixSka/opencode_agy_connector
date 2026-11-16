@@ -76,6 +76,7 @@ Or with explicit options:
         "defaultModel": "gemini-4-hydrogen",
         "defaultVariant": "medium",
         "timeoutSeconds": 600,
+        "mode": "accept-edits",
         "allowAllTools": false
       }
     }

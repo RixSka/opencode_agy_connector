@@ -37,6 +37,7 @@ test("parseAgyOutput extracts JSON result, AGY_ERROR, and headless permission de
 
   const failure = buildFailureMessage(1, null, false, parsed)
   assert.match(failure, /agy headless permission auto-denied/)
+  assert.match(failure, /"mode": "auto"/)
   assert.match(failure, /conversation_id: conv-123/)
 })
 

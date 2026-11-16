@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0 - 2026-11-16
+
+### Added
+- Exposed `mode` (`"accept-edits" | "auto" | "plan"`, default `"accept-edits"`) in plugin options (`opencode.jsonc`) and added `"auto"` to the `agy` delegation tool's `mode` enum.
+
+### Fixed
+- Headless permission auto-denial diagnostics (`buildFailureMessage`) now propose setting `"mode": "auto"` (or `"allowAllTools": true`) in `opencode_agy_connector` plugin options or adding an allow-rule in `~/.gemini/antigravity-cli/settings.json`.
+
 ## 1.2.0 - 2026-11-16
 
 ### Added
