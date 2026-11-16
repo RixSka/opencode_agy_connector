@@ -1,0 +1,20 @@
+# macOS & ExFAT metadata
+.DS_Store
+._*
+.AppleDouble
+.LSOverride
+
+# Dependencies & caches
+node_modules/
+.cache/
+.npm/
+
+# Build & coverage outputs
+dist/
+coverage/
+*.tsbuildinfo
+
+# Local secrets & environment files
+.env
+.env.*
+!.env.example
