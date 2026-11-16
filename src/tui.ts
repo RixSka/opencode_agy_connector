@@ -25,6 +25,7 @@ import {
 
 const POLL_INTERVAL_MS = 120_000
 const TICK_INTERVAL_MS = 30_000
+const STARTUP_RETRY_DELAYS_MS = [1500, 4000, 8000] as const
 
 interface SidebarColors {
   readonly base: string
@@ -78,6 +79,7 @@ function AgySidebarWidget(props: {
   const dimensions = useTerminalDimensions()
   const [width, setWidth] = createSignal(36)
   const [nowMs, setNowMs] = createSignal(Date.now())
+  const [hovered, setHovered] = createSignal(false)
 
   let targetEl: { getLayout?: () => { width: number } } | undefined
   let measureTimer: ReturnType<typeof setTimeout> | undefined
@@ -139,6 +141,8 @@ function AgySidebarWidget(props: {
   setProp(header, "flexDirection", "row")
   setProp(header, "justifyContent", "space-between")
   setProp(header, "width", "100%")
+  setProp(header, "onMouseOver", () => setHovered(true))
+  setProp(header, "onMouseOut", () => setHovered(false))
   setProp(header, "onMouseDown", (event?: { stopPropagation?: () => void }) => {
     event?.stopPropagation?.()
     void props.onRefresh(true, true)
@@ -153,7 +157,12 @@ function AgySidebarWidget(props: {
   const refreshBtn = createElement("text")
   setProp(refreshBtn, "wrapMode", "none")
   effect((prev: unknown) =>
-    setProp(refreshBtn, "fg", isRefreshing() ? colors.warn : colors.accent, prev),
+    setProp(
+      refreshBtn,
+      "fg",
+      isRefreshing() ? colors.warn : hovered() ? colors.base : colors.accent,
+      prev,
+    ),
   )
   insert(refreshBtn, () => {
     const w = width()
@@ -230,9 +239,27 @@ export default Plugin.define({
     const rpc = context.client?.rpc ? context.client.rpc(AgyUsageRpc) : undefined
     const [snapshot, setSnapshot] = createSignal<AgyUsageSnapshotDto | null>(null)
     const [refreshing, setRefreshing] = createSignal(false)
+    let disposed = false
+    let retryTimer: ReturnType<typeof setTimeout> | undefined
+    let startupRetryIndex = 0
+
+    const hasQuota = () => (snapshot()?.quotaGroups.length ?? 0) > 0
+
+    const scheduleStartupRetry = () => {
+      if (disposed || hasQuota() || retryTimer !== undefined) return
+      const delayMs = STARTUP_RETRY_DELAYS_MS[startupRetryIndex]
+      if (delayMs === undefined) return
+      startupRetryIndex += 1
+      retryTimer = setTimeout(() => {
+        retryTimer = undefined
+        if (!disposed && !hasQuota()) {
+          void refresh(false, false)
+        }
+      }, delayMs)
+    }
 
     const refresh = async (forceRefresh = false, showToast = false) => {
-      if (!rpc || refreshing()) return
+      if (disposed || !rpc || refreshing()) return
       setRefreshing(true)
       try {
         const callOpts = context.location ? { location: context.location } : undefined
@@ -242,6 +269,9 @@ export default Plugin.define({
         const parsed = parseUsageSnapshotDto(res?.json)
         if (parsed) {
           setSnapshot(parsed)
+          if (parsed.quotaGroups.length === 0 && !forceRefresh) {
+            scheduleStartupRetry()
+          }
           if (showToast) {
             context.ui?.toast?.show({
               title: "Antigravity Quota",
@@ -249,8 +279,13 @@ export default Plugin.define({
               variant: "info",
             })
           }
+        } else if (!forceRefresh) {
+          scheduleStartupRetry()
         }
       } catch (err) {
+        if (!forceRefresh) {
+          scheduleStartupRetry()
+        }
         if (showToast) {
           context.ui?.toast?.show({
             title: "Antigravity Quota",
@@ -320,6 +355,11 @@ export default Plugin.define({
     }
 
     return () => {
+      disposed = true
+      if (retryTimer !== undefined) {
+        clearTimeout(retryTimer)
+        retryTimer = undefined
+      }
       clearInterval(pollTimer)
       offUpdated?.()
       for (const cleanup of cleanups) {
