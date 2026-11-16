@@ -4,9 +4,11 @@ import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import {
+  CONTEXT_REPORT_MARKER,
   MAX_HISTORY_ENTRY_CHARS,
   MAX_PROMPT_CHARS,
   SKIP_INSTRUCTION_KEYS,
+  USAGE_REPORT_MARKER,
   type AgyMeta,
 } from "./types.ts"
 
@@ -137,6 +139,93 @@ function findLastAssistantIndex(messages: readonly Record<string, unknown>[]): n
   return -1
 }
 
+/** Strip `@N@` and `<...system-reminder>` blocks injected by plugins such as `opencode-dcp`. */
+export function stripDcpMessageRefs(text: string): string {
+  return text
+    .replace(/<[a-z0-9_-]*system-reminder>[\s\S]*?<\/[a-z0-9_-]*system-reminder>/gi, "")
+    .replace(/(?:^|\n)\s*@\d+@\s*(?=\n|$)/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
+
+/** Check whether a rendered user message text is an explicit `/context` inspection command. */
+export function parseContextCommand(text: string): { readonly matched: boolean; readonly arg?: string } {
+  const cleaned = stripDcpMessageRefs(text)
+  const unwrapped = (/<message>\s*([\s\S]*?)\s*<\/message>/i.exec(cleaned)?.[1] ?? cleaned).trim()
+  const firstLine = unwrapped.split("\n")[0]?.trim() ?? ""
+  const match = /^\/(?:agy[-_:])?context(?:\s+([^\s<]+))?\s*$/i.exec(firstLine)
+  if (!match) return { matched: false }
+  return { matched: true, ...(match[1] ? { arg: match[1] } : {}) }
+}
+
+/** Detect if the latest user turn in an AI SDK prompt is a `/context` command. */
+export function detectContextCommandInPrompt(prompt: readonly unknown[]): {
+  readonly matched: boolean
+  readonly arg?: string
+} {
+  const messages = prompt.filter(
+    (entry): entry is Record<string, unknown> =>
+      Boolean(entry && typeof entry === "object" && (entry as Record<string, unknown>).role !== "system"),
+  )
+  const lastAssistantIdx = findLastAssistantIndex(messages)
+  const trailingUsers = messages.slice(lastAssistantIdx + 1)
+  for (let i = trailingUsers.length - 1; i >= 0; i--) {
+    const rendered = stripDcpMessageRefs(renderMessageContent(trailingUsers[i]?.content, false))
+    if (!rendered || rendered.startsWith("<system-reminder>")) continue
+    const parsed = parseContextCommand(rendered)
+    if (parsed.matched) return parsed
+  }
+  return { matched: false }
+}
+
+/** Check whether a rendered user message text is an explicit `/usage` or `/quota` command. */
+export function parseUsageCommand(text: string): { readonly matched: boolean } {
+  const cleaned = stripDcpMessageRefs(text)
+  const unwrapped = (/<message>\s*([\s\S]*?)\s*<\/message>/i.exec(cleaned)?.[1] ?? cleaned).trim()
+  const firstLine = unwrapped.split("\n")[0]?.trim() ?? ""
+  const match = /^\/(?:agy[-_:])?(?:usage|quota)\s*$/i.exec(firstLine)
+  return { matched: Boolean(match) }
+}
+
+/** Detect if the latest user turn in an AI SDK prompt is a `/usage` or `/quota` command. */
+export function detectUsageCommandInPrompt(prompt: readonly unknown[]): { readonly matched: boolean } {
+  const messages = prompt.filter(
+    (entry): entry is Record<string, unknown> =>
+      Boolean(entry && typeof entry === "object" && (entry as Record<string, unknown>).role !== "system"),
+  )
+  const lastAssistantIdx = findLastAssistantIndex(messages)
+  const trailingUsers = messages.slice(lastAssistantIdx + 1)
+  for (let i = trailingUsers.length - 1; i >= 0; i--) {
+    const rendered = stripDcpMessageRefs(renderMessageContent(trailingUsers[i]?.content, false))
+    if (!rendered || rendered.startsWith("<system-reminder>")) continue
+    const parsed = parseUsageCommand(rendered)
+    if (parsed.matched) return parsed
+  }
+  return { matched: false }
+}
+
+function isDiagnosticTurnMessage(message: Record<string, unknown>): boolean {
+  const rendered = stripDcpMessageRefs(renderMessageContent(message.content, false))
+  if (!rendered) return false
+  if (
+    message.role === "assistant" &&
+    (rendered.includes(CONTEXT_REPORT_MARKER) || rendered.includes(USAGE_REPORT_MARKER))
+  ) {
+    return true
+  }
+  if (
+    message.role === "user" &&
+    (parseContextCommand(rendered).matched || parseUsageCommand(rendered).matched)
+  ) {
+    return true
+  }
+  return false
+}
+
+function stripRedundantCompactionCheckpoints(text: string): string {
+  return stripDcpMessageRefs(text.replace(/<conversation-checkpoint>[\s\S]*?<\/conversation-checkpoint>/gi, ""))
+}
+
 /** Serialize an AI SDK prompt into a self-contained or resumed `agy -p` input string. */
 export function buildProviderPrompt(params: {
   readonly prompt: readonly unknown[]
@@ -147,18 +236,25 @@ export function buildProviderPrompt(params: {
 }): string {
   const { prompt, resumingConversation, meta, agentChanged, readOnly } = params
   const messages = prompt.filter(
-    (entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === "object" && (entry as Record<string, unknown>).role !== "system"),
+    (entry): entry is Record<string, unknown> =>
+      Boolean(
+        entry &&
+          typeof entry === "object" &&
+          (entry as Record<string, unknown>).role !== "system" &&
+          !isDiagnosticTurnMessage(entry as Record<string, unknown>),
+      ),
   )
 
   const lastAssistantIdx = findLastAssistantIndex(messages)
   const trailingUsers = messages.slice(lastAssistantIdx + 1)
 
   if (resumingConversation) {
-    const latestText = trailingUsers
+    const rawLatestText = trailingUsers
       .map((m) => renderMessageContent(m.content, true))
       .filter(Boolean)
       .join("\n\n")
       .trim()
+    const latestText = stripRedundantCompactionCheckpoints(rawLatestText)
     if (!latestText) return ""
 
     const prefixes: string[] = []

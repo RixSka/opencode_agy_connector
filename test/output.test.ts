@@ -48,8 +48,11 @@ test("toV3Usage maps agy usage fields to AI SDK v3 format", () => {
     thinking_tokens: 80,
   })
 
-  assert.equal(mapped.inputTokens.total, 1200)
+  assert.equal(mapped.inputTokens.noCache, 1200)
   assert.equal(mapped.inputTokens.cacheRead, 400)
+  assert.equal(mapped.inputTokens.total, 1600)
+  assert.equal(mapped.inputTokens.cacheWrite, 0)
   assert.equal(mapped.outputTokens.total, 250)
+  assert.equal(mapped.outputTokens.text, 170)
   assert.equal(mapped.outputTokens.reasoning, 80)
 })

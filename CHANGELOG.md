@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0 - 2026-11-16
+
+### Added
+- Built-in `/context` command (`ctx.command.transform` + direct `agy/*` provider interception) that displays Antigravity's real context window usage, visual category breakdown (`System & agy Tools`, `User Prompts`, `Tool Calls`, `Assistant & History`), step-by-step trajectory from `~/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript.jsonl`, live quota buckets (`agy -p "/usage"`), and direct `agy --conversation <id>` links without spending LLM tokens.
+- Built-in `/usage` command for `agy/*` models (`ctx.command.transform` + `doStream` interception) and dynamic plan-aware model initialization (`discoverPlanCatalog` over `agy models`, `/usage`, and `/credits`), annotating `/models` entries with live quota badges and refreshing model status on demand.
+
+### Fixed
+- Accurate OpenCode token and context accounting: populate `inputTokens.noCache` (`tokens.input`), compute `inputTokens.total = noCache + cacheRead`, use the latest `step_update` `DONE` call for active context window size (instead of `result.usage` multi-step/multi-turn cumulative sums), set real model `limit.context` (`1,000,000` for Gemini 4 / Claude 5.5, `128,000` for GPT-OSS 120B), and strip redundant `<conversation-checkpoint>` blocks when resuming an active `agy --conversation`.
+
 ## 1.0.1 - 2026-11-16
 
 ### Changed

@@ -4,6 +4,10 @@ export const DEFAULT_MODEL_ID = "gemini-4-hydrogen"
 export const DEFAULT_VARIANT_ID = "medium"
 export const DEFAULT_TOOL_MODEL = "gemini-4-hydrogen-medium"
 export const DEFAULT_TIMEOUT_SECONDS = 600
+export const DEFAULT_CONTEXT_WINDOW = 1_000_000
+export const DEFAULT_MAX_OUTPUT_TOKENS = 64_000
+export const CONTEXT_REPORT_MARKER = "Antigravity (agy) Context Analysis"
+export const USAGE_REPORT_MARKER = "Antigravity (agy) Plan & Quota Usage"
 export const MAX_OUTPUT_BYTES = 100 * 1024
 export const MAX_CAPTURE_BYTES = 2 * 1024 * 1024
 export const MAX_PROMPT_CHARS = 120_000
@@ -23,6 +27,8 @@ export interface AgyModelSpec {
   readonly name: string
   readonly variants?: readonly string[]
   readonly defaultVariant?: string
+  readonly contextWindow?: number
+  readonly maxOutputTokens?: number
 }
 
 export const AGY_MODEL_SPECS: readonly AgyModelSpec[] = [
@@ -31,38 +37,52 @@ export const AGY_MODEL_SPECS: readonly AgyModelSpec[] = [
     name: "Gemini 4 Hydrogen (Antigravity)",
     variants: ["low", "medium", "high", "xhigh"],
     defaultVariant: "medium",
+    contextWindow: 1_000_000,
+    maxOutputTokens: 64_000,
   },
   {
     id: "gemini-4-argon",
     name: "Gemini 4 Argon (Antigravity)",
     variants: ["low", "medium", "high"],
     defaultVariant: "high",
+    contextWindow: 1_000_000,
+    maxOutputTokens: 64_000,
   },
   {
     id: "gemini-3.8-flash",
     name: "Gemini 3.8 Flash (Antigravity)",
     variants: ["low", "medium", "high"],
     defaultVariant: "medium",
+    contextWindow: 1_000_000,
+    maxOutputTokens: 64_000,
   },
   {
     id: "gemini-pro-orchestrator-g1-pro",
     name: "Orchestrator Argon (Antigravity)",
+    contextWindow: 1_000_000,
+    maxOutputTokens: 64_000,
   },
   {
     id: "claude-opus-5-5",
     name: "Claude Opus 5.5 (Antigravity)",
     variants: ["low", "medium", "high"],
     defaultVariant: "high",
+    contextWindow: 1_000_000,
+    maxOutputTokens: 64_000,
   },
   {
     id: "claude-sonnet-5-5",
     name: "Claude Sonnet 5.5 (Antigravity)",
     variants: ["low", "medium", "high"],
     defaultVariant: "high",
+    contextWindow: 1_000_000,
+    maxOutputTokens: 64_000,
   },
   {
     id: "gpt-oss-120b-medium",
     name: "GPT-OSS 120B Medium (Antigravity)",
+    contextWindow: 128_000,
+    maxOutputTokens: 32_000,
   },
 ]
 

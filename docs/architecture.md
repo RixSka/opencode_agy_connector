@@ -18,9 +18,10 @@
    - Registers the `agy` tool (`ctx.tool.transform`) so non-Antigravity sessions (such as Claude agents) can delegate heavy analyses, refactors, PDF inspection, or test generation to headless `agy -p --output-format json`.
    - Caps returned text at 100 KB (`MAX_OUTPUT_BYTES`) and preserves `conversation_id` across both successes and failures.
 
-4. **Bundled Skill & Command (`src/assets.ts`, `src/skill-doc.ts`)**
+4. **Bundled Skill & Commands (`src/assets.ts`, `src/context.ts`, `src/skill-doc.ts`)**
    - Reads `skills/agy/SKILL.md` from the package and registers it via `ctx.skill.transform` when no higher-precedence global or project `agy` skill exists.
    - Registers `/agy` via `ctx.command.transform`, switching the active session model to `agy/<defaultModel>#<defaultVariant>` before submitting the prompt.
+   - Registers `/context` (and intercepts `/context` turns directly inside `doStream` when on `agy/*` models) to parse `~/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript.jsonl` + `agy -p "/usage" --output-format json`, rendering the real context breakdown and synchronizing OpenCode's session context counters without invoking an LLM turn.
 
 ## Subprocess Isolation & Cleanup (`src/env.ts`, `src/runner.ts`, `src/output.ts`)
 

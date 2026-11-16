@@ -111,17 +111,24 @@ export function buildFailureMessage(
 
 /** Convert an Antigravity CLI usage object into AI SDK v3 token usage counters. */
 export function toV3Usage(usage?: AgyUsage): V3Usage {
+  const noCache = usage?.input_tokens ?? 0
+  const cacheRead = usage?.cache_read_tokens ?? 0
+  const totalInput = noCache + cacheRead
+  const totalOutput = usage?.output_tokens ?? 0
+  const reasoning = usage?.thinking_tokens ?? 0
+  const textOutput = Math.max(0, totalOutput - reasoning)
+
   return {
     inputTokens: {
-      total: usage?.input_tokens ?? 0,
-      noCache: undefined,
-      cacheRead: usage?.cache_read_tokens ?? 0,
-      cacheWrite: undefined,
+      total: totalInput,
+      noCache,
+      cacheRead,
+      cacheWrite: 0,
     },
     outputTokens: {
-      total: usage?.output_tokens ?? 0,
-      text: undefined,
-      reasoning: usage?.thinking_tokens ?? 0,
+      total: totalOutput,
+      text: textOutput,
+      reasoning,
     },
   }
 }

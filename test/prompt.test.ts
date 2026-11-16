@@ -1,6 +1,16 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { buildInstantTitle, buildProviderPrompt, extractRelevantInstructions, renderMessageContent } from "../src/prompt.ts"
+import {
+  buildInstantTitle,
+  buildProviderPrompt,
+  detectContextCommandInPrompt,
+  detectUsageCommandInPrompt,
+  extractRelevantInstructions,
+  parseContextCommand,
+  parseUsageCommand,
+  renderMessageContent,
+} from "../src/prompt.ts"
+import { CONTEXT_REPORT_MARKER } from "../src/types.ts"
 
 test("extractRelevantInstructions keeps custom agent prompts and project instructions while skipping internal harness blocks", () => {
   const instructions = extractRelevantInstructions([
@@ -89,4 +99,58 @@ test("renderMessageContent renders text parts and tool call summaries", () => {
     false,
   )
   assert.equal(rendered, "Inspecting file\n[Used tool read_file]")
+})
+
+test("parseContextCommand and detectContextCommandInPrompt recognize /context commands", () => {
+  assert.deepEqual(parseContextCommand("/context"), { matched: true })
+  assert.deepEqual(
+    parseContextCommand(
+      "/context 7b9f0225-07e5-45e5-bc5a-39348c35e5cb\n\n<dcp-system-reminder>\nCRITICAL WARNING: MAX CONTEXT LIMIT REACHED\n</dcp-system-reminder>\n\n@5@",
+    ),
+    {
+      matched: true,
+      arg: "7b9f0225-07e5-45e5-bc5a-39348c35e5cb",
+    },
+  )
+  assert.deepEqual(parseContextCommand("<message>/context 7b9f0225-07e5</message>"), {
+    matched: true,
+    arg: "7b9f0225-07e5",
+  })
+  assert.deepEqual(parseContextCommand("Explain /context"), { matched: false })
+
+  const detected = detectContextCommandInPrompt([
+    { role: "user", content: "Initial task" },
+    { role: "assistant", content: "Done." },
+    { role: "user", content: "<system-reminder>Mode changed</system-reminder>" },
+    { role: "user", content: "/context" },
+  ])
+  assert.equal(detected.matched, true)
+
+  assert.deepEqual(parseUsageCommand("/usage\n\n@3@"), { matched: true })
+  assert.deepEqual(parseUsageCommand("/quota"), { matched: true })
+  assert.equal(
+    detectUsageCommandInPrompt([{ role: "user", content: "/usage\n\n@2@" }]).matched,
+    true,
+  )
+})
+
+test("buildProviderPrompt strips diagnostic /context turns and redundant compaction checkpoints", () => {
+  const resumed = buildProviderPrompt({
+    prompt: [
+      { role: "user", content: "First prompt" },
+      { role: "assistant", content: "First reply" },
+      { role: "user", content: "/context" },
+      { role: "assistant", content: `${CONTEXT_REPORT_MARKER}\nContext report body` },
+      {
+        role: "user",
+        content: "<conversation-checkpoint>\nSummary of old turns\n</conversation-checkpoint>\n\nActual follow-up question",
+      },
+    ],
+    resumingConversation: true,
+    meta: { sessionID: "ses_1", agent: "build", kind: "primary", instructions: "" },
+    agentChanged: false,
+    readOnly: false,
+  })
+
+  assert.equal(resumed, "Actual follow-up question")
 })

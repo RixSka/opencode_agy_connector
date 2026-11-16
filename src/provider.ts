@@ -1,16 +1,36 @@
 import { Model, Provider, type Plugin } from "@opencode/plugin"
+import {
+  buildAgyContextReport,
+  buildAgyUsageReport,
+  consumePendingContextRequest,
+  consumePendingUsageRequest,
+  discoverPlanCatalog,
+  evaluateModelQuotaStatus,
+  readAgyTranscriptSummary,
+} from "./context.ts"
 import { buildSanitizedEnv, resolveAgyBinary } from "./env.ts"
 import { buildFailureMessage, inspectControlLine, toV3Usage } from "./output.ts"
-import { buildInstantTitle, buildProviderPrompt, extractRelevantInstructions } from "./prompt.ts"
+import {
+  buildInstantTitle,
+  buildProviderPrompt,
+  detectContextCommandInPrompt,
+  detectUsageCommandInPrompt,
+  extractRelevantInstructions,
+} from "./prompt.ts"
 import { spawnAgyProcess } from "./runner.ts"
 import {
+  AGY_MODEL_MAP,
   AGY_MODEL_SPECS,
+  DEFAULT_CONTEXT_WINDOW,
+  DEFAULT_MAX_OUTPUT_TOKENS,
   PROVIDER_ID,
   resolveProviderCliModel,
   type AgyConnectorConfig,
   type AgyErrorPayload,
   type AgyJsonResult,
   type AgyMeta,
+  type AgyUsage,
+  type V3Usage,
 } from "./types.ts"
 
 interface StreamTurnParams {
@@ -62,16 +82,20 @@ function buildStreamArgs(params: {
 
 function createEmptyPromptStream(cliModel: string): ReadableStream<any> {
   const msg = `Antigravity is active on \`${cliModel}\`. Enter a request after \`/agy <task>\` or type directly in chat.`
+  return createInstantReportStream(msg, toV3Usage())
+}
+
+function createInstantReportStream(text: string, usage: V3Usage): ReadableStream<any> {
   return new ReadableStream({
     start(controller) {
       controller.enqueue({ type: "stream-start", warnings: [] })
-      controller.enqueue({ type: "text-start", id: "t_empty" })
-      controller.enqueue({ type: "text-delta", id: "t_empty", delta: msg })
-      controller.enqueue({ type: "text-end", id: "t_empty" })
+      controller.enqueue({ type: "text-start", id: "t_instant" })
+      controller.enqueue({ type: "text-delta", id: "t_instant", delta: text })
+      controller.enqueue({ type: "text-end", id: "t_instant" })
       controller.enqueue({
         type: "finish",
-        finishReason: { unified: "stop", raw: "EMPTY_PROMPT" },
-        usage: toV3Usage(),
+        finishReason: { unified: "stop", raw: "SUCCESS" },
+        usage,
       })
       controller.close()
     },
@@ -106,6 +130,10 @@ function createStreamingAgyStream(params: StreamTurnParams): ReadableStream<any>
       let resultPayload: AgyJsonResult | undefined
       let agyError: AgyErrorPayload | undefined
       let permissionBlocked: string | undefined
+      let lastStepUsage: AgyUsage | undefined
+      let turnOutputTokens = 0
+      let turnThinkingTokens = 0
+      const countedSteps = new Set<string>()
       let finalUsage = toV3Usage()
       const startedTools = new Set<string>()
       const endedTools = new Set<string>()
@@ -167,6 +195,25 @@ function createStreamingAgyStream(params: StreamTurnParams): ReadableStream<any>
           const su = ev.step_update as Record<string, any>
           params.onConversationId(typeof su.conversation_id === "string" ? su.conversation_id : undefined)
 
+          if (su.usage && typeof su.usage === "object") {
+            const u = su.usage as AgyUsage
+            if ((u.input_tokens ?? 0) > 0 || (u.cache_read_tokens ?? 0) > 0 || (u.output_tokens ?? 0) > 0) {
+              lastStepUsage = u
+              const stepKey = String(su.step_index ?? "")
+              if (su.state === "DONE" && stepKey && !countedSteps.has(stepKey)) {
+                countedSteps.add(stepKey)
+                turnOutputTokens += u.output_tokens ?? 0
+                turnThinkingTokens += u.thinking_tokens ?? 0
+              }
+              finalUsage = toV3Usage({
+                input_tokens: lastStepUsage.input_tokens ?? 0,
+                cache_read_tokens: lastStepUsage.cache_read_tokens ?? 0,
+                output_tokens: turnOutputTokens > 0 ? turnOutputTokens : (lastStepUsage.output_tokens ?? 0),
+                thinking_tokens: turnThinkingTokens > 0 ? turnThinkingTokens : (lastStepUsage.thinking_tokens ?? 0),
+              })
+            }
+          }
+
           if (su.step_type === "tool") {
             const callId = `agy_step_${String(su.step_index)}`
             const toolInfo = (su.tool_info ?? {}) as Record<string, any>
@@ -223,7 +270,7 @@ function createStreamingAgyStream(params: StreamTurnParams): ReadableStream<any>
         if (ev.event === "result" && ev.result) {
           resultPayload = ev.result as AgyJsonResult
           params.onConversationId(resultPayload.conversation_id)
-          if (resultPayload.usage) {
+          if (!lastStepUsage && resultPayload.usage) {
             finalUsage = toV3Usage(resultPayload.usage)
           }
         }
@@ -346,6 +393,14 @@ export async function registerAgyProvider(
   const activeConversations = new Map<string, string>()
   const lastSessionAgents = new Map<string, string>()
   const providerID = Provider.ID.make(PROVIDER_ID)
+  const startupEnv = buildSanitizedEnv()
+  const startupAgyBin = resolveAgyBinary(config.binaryPath, startupEnv)
+  let currentCatalog = await discoverPlanCatalog(
+    startupAgyBin,
+    workspaceDir,
+    startupEnv,
+    config.defaultModel,
+  )
 
   await ctx.provider.transform((editor) => {
     const info = {
@@ -355,22 +410,30 @@ export async function registerAgyProvider(
       package: "aisdk:agy-local",
     }
 
-    const models = AGY_MODEL_SPECS.map((spec) => ({
-      ...Model.Info.default(providerID, Model.ID.make(spec.id)),
-      name: spec.name,
-      package: "aisdk:agy-local",
-      capabilities: {
-        tools: true,
-        input: ["text", "image", "pdf"],
-        output: ["text"],
-      },
-      variants: (spec.variants ?? []).map((variant) => ({
-        id: Model.VariantID.make(variant),
-        settings: { effort: variant },
-      })),
-      status: "active" as const,
-      enabled: true,
-    }))
+    const activeSpecs = currentCatalog.models.length > 0 ? currentCatalog.models : AGY_MODEL_SPECS
+    const models = activeSpecs.map((spec) => {
+      const quotaStatus = evaluateModelQuotaStatus(spec, currentCatalog.quotaGroups)
+      return {
+        ...Model.Info.default(providerID, Model.ID.make(spec.id)),
+        name: quotaStatus.displayName,
+        package: "aisdk:agy-local",
+        capabilities: {
+          tools: true,
+          input: ["text", "image", "pdf"],
+          output: ["text"],
+        },
+        variants: (spec.variants ?? []).map((variant) => ({
+          id: Model.VariantID.make(variant),
+          settings: { effort: variant },
+        })),
+        status: "active" as const,
+        enabled: true,
+        limit: {
+          context: spec.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
+          output: spec.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+        },
+      }
+    })
 
     editor.add({ info, models })
   })
@@ -441,6 +504,70 @@ export async function registerAgyProvider(
             const storedAgent = await ctx.storage.get(`agy:agent:${sessionID}`)
             if (typeof storedAgent === "string" && storedAgent) prevAgent = storedAgent
           }
+        }
+
+        const pendingUsage = isPrimary ? consumePendingUsageRequest(sessionID) : false
+        const usageCmd =
+          pendingUsage || (isPrimary ? detectUsageCommandInPrompt(options.prompt).matched : false)
+        if (usageCmd) {
+          const env = buildSanitizedEnv()
+          const agyBin = resolveAgyBinary(config.binaryPath, env)
+          const { report, catalog } = await buildAgyUsageReport({
+            sessionID: sessionID ?? "",
+            modelId: input.model.id,
+            variant: effort,
+            agyBin,
+            workspaceDir,
+            env,
+            preferredDefaultModel: config.defaultModel,
+          })
+          currentCatalog = catalog
+          void ctx.model.reload().catch(() => {})
+
+          const existingSummary = readAgyTranscriptSummary(prevConvId)
+          const syncUsage = existingSummary?.latestStep
+            ? toV3Usage({
+                input_tokens: existingSummary.latestInputTokens,
+                cache_read_tokens: existingSummary.latestCacheReadTokens,
+                output_tokens: 1,
+                thinking_tokens: 0,
+              })
+            : toV3Usage()
+          return { stream: createInstantReportStream(report, syncUsage) }
+        }
+
+        const pendingCtx = isPrimary ? consumePendingContextRequest(sessionID) : { matched: false }
+        const contextCmd = pendingCtx.matched
+          ? pendingCtx
+          : isPrimary
+            ? detectContextCommandInPrompt(options.prompt)
+            : { matched: false }
+        if (contextCmd.matched) {
+          const targetConvId = contextCmd.arg || prevConvId
+          const env = buildSanitizedEnv()
+          const agyBin = resolveAgyBinary(config.binaryPath, env)
+          const spec = AGY_MODEL_MAP.get(input.model.id)
+          const { report, latestStepUsage } = await buildAgyContextReport({
+            sessionID: sessionID ?? "",
+            providerId: PROVIDER_ID,
+            modelId: input.model.id,
+            variant: effort,
+            cliModel,
+            contextLimit: spec?.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
+            conversationId: targetConvId,
+            agyBin,
+            workspaceDir,
+            env,
+          })
+          const syncUsage = latestStepUsage
+            ? toV3Usage({
+                input_tokens: latestStepUsage.inputTokens,
+                cache_read_tokens: latestStepUsage.cacheReadTokens,
+                output_tokens: 1,
+                thinking_tokens: 0,
+              })
+            : toV3Usage()
+          return { stream: createInstantReportStream(report, syncUsage) }
         }
 
         const promptText = buildProviderPrompt({

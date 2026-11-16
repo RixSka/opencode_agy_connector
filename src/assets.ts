@@ -1,5 +1,11 @@
 import { readFileSync } from "node:fs"
 import { Skill, type Plugin } from "@opencode/plugin"
+import {
+  buildAgyContextReport,
+  enqueuePendingContextRequest,
+  enqueuePendingUsageRequest,
+} from "./context.ts"
+import { buildSanitizedEnv, resolveAgyBinary } from "./env.ts"
 import { getBundledSkillPath, parseSkillMarkdown } from "./skill-doc.ts"
 import { PROVIDER_ID, type AgyConnectorConfig } from "./types.ts"
 
@@ -63,6 +69,72 @@ export async function registerPluginAssets(
               ...(config.defaultVariant ? { variant: config.defaultVariant } : {}),
             },
           })
+
+          await ctx.session.prompt({
+            ...prompt,
+            sessionID,
+            delivery,
+          })
+        },
+      })
+
+      editor.add({
+        name: "context",
+        description: "Show real Antigravity (agy) context window, step-by-step tokens, tool breakdown, and quota",
+        execute: async ({ sessionID, prompt, delivery }) => {
+          const session = await ctx.session.get({ sessionID })
+          const rawArg = (prompt.text ?? "").replace(/^\/(?:agy[-_:])?context\b/i, "").trim()
+
+          if (session.model?.providerID === PROVIDER_ID) {
+            enqueuePendingContextRequest(sessionID, rawArg || undefined)
+            await ctx.session.prompt({
+              ...prompt,
+              text: rawArg ? `/context ${rawArg}` : "/context",
+              sessionID,
+              delivery,
+            })
+            return
+          }
+
+          const storedConv = await ctx.storage.get(`agy:conv:${sessionID}`)
+          const convId = rawArg || (typeof storedConv === "string" && storedConv ? storedConv : undefined)
+          const env = buildSanitizedEnv()
+          const agyBin = resolveAgyBinary(config.binaryPath, env)
+          const { report } = await buildAgyContextReport({
+            sessionID,
+            providerId: session.model?.providerID ?? PROVIDER_ID,
+            modelId: session.model?.id ?? config.defaultModel,
+            variant: session.model?.variant ?? config.defaultVariant,
+            conversationId: convId,
+            agyBin,
+            workspaceDir: ctx.location.directory,
+            env,
+          })
+
+          await ctx.session.synthetic({
+            sessionID,
+            text: report,
+            description: "/context",
+            resume: false,
+          })
+        },
+      })
+
+      editor.add({
+        name: "usage",
+        description: "Show Antigravity (agy) plan tier, quota buckets, reset timers, and initialized models (agy/* only)",
+        execute: async ({ sessionID, prompt, delivery }) => {
+          const session = await ctx.session.get({ sessionID })
+          if (session.model?.providerID === PROVIDER_ID) {
+            enqueuePendingUsageRequest(sessionID)
+            await ctx.session.prompt({
+              ...prompt,
+              text: "/usage",
+              sessionID,
+              delivery,
+            })
+            return
+          }
 
           await ctx.session.prompt({
             ...prompt,
