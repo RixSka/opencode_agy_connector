@@ -74,8 +74,11 @@ Pass plugin options in `opencode.jsonc` using the object plugin syntax:
         "defaultVariant": "medium",
         "defaultToolModel": "gemini-4-hydrogen-medium",
         "timeoutSeconds": 600,
+        "swarmTimeoutSeconds": 0,
         "mode": "accept-edits",
         "allowAllTools": false,
+        "allowSwarm": true,
+        "enableSlashCommands": false,
         "readOnlyAgents": ["plan", "reviewer", "explore"],
         "registerProvider": true,
         "registerTool": true,
@@ -94,12 +97,15 @@ Pass plugin options in `opencode.jsonc` using the object plugin syntax:
 | `defaultVariant` | `string` | `"medium"` | Effort variant selected by `/agy` when supported by `defaultModel`. |
 | `defaultToolModel` | `string` | Derived (`gemini-4-hydrogen-medium`) | Default CLI model passed to `agy -p` by the `agy` delegation tool. |
 | `timeoutSeconds` | `number` | `600` | Print timeout in seconds (`0` disables `--print-timeout`). |
-| `mode` | `"accept-edits" \| "auto" \| "plan"` | `"accept-edits"` | Execution mode passed via `--mode` on primary non-read-only `agy/*` runs. Set to `"auto"` if headless `command` permissions are being auto-denied. |
+| `swarmTimeoutSeconds` | `number` | `0` | Print timeout in seconds used on `/swarm` and active-swarm turns (`0` waits until the swarm completes). |
+| `mode` | `"accept-edits" \| "auto" \| "plan"` | `"accept-edits"` | Execution mode passed via `--mode` on primary non-read-only `agy/*` runs. |
 | `allowAllTools` | `boolean` | `false` | Pass `--dangerously-skip-permissions` on primary non-read-only `agy/*` runs so headless shell commands outside `settings.json` are not auto-denied. Ignored on `readOnlyAgents` and background compaction/generate turns. |
+| `allowSwarm` | `boolean` | `true` | Register `/swarm`, omit `--disable-slash-commands` on `/swarm` and active-swarm turns, and allow `swarmTimeoutSeconds` to apply. |
+| `enableSlashCommands` | `boolean` | `false` | Allow all Antigravity slash commands in `agy -p` by omitting `--disable-slash-commands` on every turn (instead of only `/swarm` / active swarms). |
 | `readOnlyAgents` | `string[]` | `["plan", "reviewer", "explore"]` | OpenCode agent IDs constrained to read-only execution (`--mode` omitted + read-only prompt guardrail). |
 | `registerProvider` | `boolean` | `true` | Register the native `agy/*` AI SDK provider and session hooks. |
 | `registerTool` | `boolean` | `true` | Register the `agy` delegation tool for other models/sessions. |
-| `registerCommand` | `boolean` | `true` | Register the built-in `/agy` slash command. Set to `false` if using a custom `commands/agy.md` file. |
+| `registerCommand` | `boolean` | `true` | Register the built-in `/agy`, `/swarm`, `/context`, and `/usage` slash commands. Set to `false` if using a custom `commands/agy.md` file. |
 | `registerSkill` | `boolean` | `true` | Register the bundled `agy` skill unless an existing global/project `agy` skill already overrides it. |
 
 ---

@@ -5,7 +5,7 @@
 1. **Native AI SDK v3 Model Provider (`src/provider.ts`)**
    - Registers provider `agy` (`package: "aisdk:agy-local"`) via `ctx.provider.transform`.
    - Hooks `ctx.aisdk.hook("sdk")` and `ctx.aisdk.hook("language")` with AI SDK v3 `doStream` and `doGenerate`.
-   - Spawns `agy -p ... --output-format stream-json --disable-slash-commands` and parses NDJSON events live into `text-start`/`text-delta`/`text-end`, `tool-input-*`, `tool-call`, `tool-result` (`providerExecuted: true`), usage counters, and structured errors.
+   - Spawns `agy -p ... --output-format stream-json` (passing `--disable-slash-commands` unless `enableSlashCommands` is `true` or the turn uses `/swarm` / an active swarm) and parses NDJSON events live into `text-start`/`text-delta`/`text-end`, `tool-input-*`, `tool-call`, `tool-result` (`providerExecuted: true`, covering both `tool` and `subagent` steps), usage counters, and structured errors.
 
 2. **Session Lifecycle & Context Hooks (`src/provider.ts`, `src/prompt.ts`)**
    - **`ctx.session.hook("title")`:** Computes an immediate title from the user message without spawning an auxiliary LLM process.
@@ -20,12 +20,12 @@
 
 4. **Bundled Skill & Commands (`src/assets.ts`, `src/context.ts`, `src/skill-doc.ts`)**
    - Reads `skills/agy/SKILL.md` from the package and registers it via `ctx.skill.transform` when no higher-precedence global or project `agy` skill exists.
-   - Registers `/agy` via `ctx.command.transform`, switching the active session model to `agy/<defaultModel>#<defaultVariant>` before submitting the prompt.
+   - Registers `/agy` and `/swarm` via `ctx.command.transform`, switching the active session model to `agy/<defaultModel>#<defaultVariant>` when needed (preserving the active `agy/*` model on `/swarm`) before submitting the prompt.
    - Registers `/context` and `/usage` (and intercepts them directly inside `doStream` when on `agy/*` models) to parse `~/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript.jsonl` + `agy -p "/usage"` + `agy -p "/credits"` + `agy models`, rendering the real context breakdown, plan status, and initialized model catalog without invoking an LLM turn.
 
-5. **Right-Sidebar TUI Widget & RPC (`src/tui.ts`, `src/tui-format.ts`, `src/rpc.ts`)**
-   - Server registers `AgyUsageRpc` (`getUsage` method + `updated` event) so any TUI client can query or subscribe to live quota updates without blocking turns.
-   - `./tui` mounts an **Antigravity Quota** section in OpenCode's `sidebar.content` slot showing the plan/credits badge, per-pool quota bars, percentages, reset countdowns, clickable `[↻ Refresh]` trigger, `/agy-refresh` command, event-driven turn updates, and 2-minute background polling.
+5. **Right-Sidebar TUI Widget, Swarm/Subagents Telemetry & RPC (`src/tui.ts`, `src/tui-format.ts`, `src/subagents.ts`, `src/rpc.ts`)**
+   - Server registers `AgyUsageRpc` (`getUsage` + `getAgents` methods, `updated` + `agentsUpdated` events) so any TUI client receives live quota updates and real-time swarm/subagent snapshots (streaming subagent steps + `~/.gemini/antigravity-cli/brain/<id>/.system_generated/{swarm,subagents}` + per-member `transcript.jsonl` telemetry).
+   - `./tui` mounts **Antigravity Quota** plus conditional **Swarm & Subagents** sections in OpenCode's `sidebar.content` slot showing each member/subagent's status (`Active`, `Waiting`, `Done`, `Blocked · <tool>`, `Quota`, `Error`, `Stuck`, `Killed`), model, current tool/thinking activity, step/token/post/unread counts, workspace mode, latest board post, `/agy-refresh` + `/agy-swarm` commands, and an interactive `[Board]` / `[Inspect]` modal.
 
 ## Subprocess Isolation & Cleanup (`src/env.ts`, `src/runner.ts`, `src/output.ts`)
 

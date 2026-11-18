@@ -4,6 +4,7 @@ import {
   buildAgyUsageReport,
   buildUsageSnapshotDto,
   consumePendingContextRequest,
+  consumePendingSwarmRequest,
   consumePendingUsageRequest,
   discoverPlanCatalog,
   evaluateModelQuotaStatus,
@@ -16,11 +17,17 @@ import {
   buildInstantTitle,
   buildProviderPrompt,
   detectContextCommandInPrompt,
+  detectSwarmCommandInPrompt,
   detectUsageCommandInPrompt,
   extractRelevantInstructions,
 } from "./prompt.ts"
 import { AgyUsageRpc } from "./rpc.ts"
 import { spawnAgyProcess } from "./runner.ts"
+import {
+  hasActiveAgySwarm,
+  readAgyAgentsSnapshot,
+  type LiveStreamSubagent,
+} from "./subagents.ts"
 import {
   AGY_MODEL_MAP,
   AGY_MODEL_SPECS,
@@ -45,16 +52,24 @@ interface StreamTurnParams {
   readonly timeoutSeconds: number
   readonly abortSignal?: AbortSignal
   readonly onConversationId: (convId?: string) => void
+  readonly onSubagentStep?: (
+    stepIndex: number,
+    state: string,
+    subagents: readonly Record<string, unknown>[],
+  ) => void
+  readonly onSwarmOrAgentActivity?: () => void
   readonly onTurnComplete?: () => void
 }
 
-function buildStreamArgs(params: {
+/** Build `agy -p` CLI arguments for a native OpenCode provider turn. */
+export function buildStreamArgs(params: {
   readonly promptText: string
   readonly cliModel: string
   readonly timeoutSeconds: number
   readonly readOnly: boolean
   readonly mode: AgyExecutionMode
   readonly allowAllTools: boolean
+  readonly enableSlashCommands?: boolean
   readonly prevConvId?: string
   readonly responseSchema?: unknown
 }): string[] {
@@ -65,10 +80,12 @@ function buildStreamArgs(params: {
     params.cliModel,
     "--output-format",
     "stream-json",
-    "--disable-slash-commands",
-    "--print-timeout",
-    `${params.timeoutSeconds}s`,
   ]
+
+  if (!params.enableSlashCommands) {
+    args.push("--disable-slash-commands")
+  }
+  args.push("--print-timeout", `${params.timeoutSeconds}s`)
 
   if (!params.readOnly) {
     args.push("--mode", params.mode)
@@ -115,7 +132,7 @@ function createStreamingAgyStream(params: StreamTurnParams): ReadableStream<any>
 
       let timedOut = false
       let closed = false
-      const { child, cleanup } = spawnAgyProcess(
+      const { child, cleanup: cleanupProcess } = spawnAgyProcess(
         params.agyBin,
         params.args,
         params.workspaceDir,
@@ -126,6 +143,13 @@ function createStreamingAgyStream(params: StreamTurnParams): ReadableStream<any>
           timedOut = true
         },
       )
+      const liveTicker = setInterval(() => {
+        params.onSwarmOrAgentActivity?.()
+      }, 2500)
+      const cleanup = () => {
+        clearInterval(liveTicker)
+        cleanupProcess()
+      }
 
       let stdoutBuf = ""
       const rawStdoutLines: string[] = []
@@ -220,11 +244,15 @@ function createStreamingAgyStream(params: StreamTurnParams): ReadableStream<any>
             }
           }
 
-          if (su.step_type === "tool") {
+          if (su.step_type === "tool" || su.step_type === "subagent") {
+            const isSubagentStep = su.step_type === "subagent"
             const callId = `agy_step_${String(su.step_index)}`
             const toolInfo = (su.tool_info ?? {}) as Record<string, any>
-            const toolName = String(su.tool_name || toolInfo.name || "agy_tool")
-            const toolParams = toolInfo.parameters ?? {}
+            const subagentInfo = (su.subagent_info ?? {}) as Record<string, any>
+            const toolName = String(
+              su.tool_name || toolInfo.name || (isSubagentStep ? "invoke_subagent" : "agy_tool"),
+            )
+            const toolParams = isSubagentStep ? subagentInfo : (toolInfo.parameters ?? {})
             const paramsJson = JSON.stringify(toolParams)
 
             if (!startedTools.has(callId)) {
@@ -247,9 +275,25 @@ function createStreamingAgyStream(params: StreamTurnParams): ReadableStream<any>
               })
             }
 
+            if (isSubagentStep) {
+              const list = Array.isArray(subagentInfo.subagents)
+                ? (subagentInfo.subagents as Record<string, unknown>[])
+                : []
+              params.onSubagentStep?.(Number(su.step_index ?? 0), String(su.state ?? ""), list)
+            } else if (
+              toolName === "swarm" ||
+              toolName === "post_message" ||
+              toolName === "read_board" ||
+              toolName === "swarm_wait" ||
+              toolName === "manage_subagents" ||
+              toolName === "define_subagent"
+            ) {
+              params.onSwarmOrAgentActivity?.()
+            }
+
             if (su.state === "DONE" && !endedTools.has(callId)) {
               endedTools.add(callId)
-              const output = toolInfo.output
+              const output = isSubagentStep ? subagentInfo : toolInfo.output
               const resultVal =
                 typeof output === "string"
                   ? { output }
@@ -400,6 +444,8 @@ export async function registerAgyProvider(
   const workspaceDir = ctx.location.directory
   const activeConversations = new Map<string, string>()
   const lastSessionAgents = new Map<string, string>()
+  const liveStreamSubagents = new Map<string, LiveStreamSubagent[]>()
+  const lastAgentsFingerprint = new Map<string, string>()
   const providerID = Provider.ID.make(PROVIDER_ID)
   const disposers: Array<{ dispose?: () => Promise<void> | void }> = []
   const startupEnv = buildSanitizedEnv()
@@ -413,6 +459,40 @@ export async function registerAgyProvider(
   let lastCatalogRefreshAt = Date.now()
   let pendingRefreshPromise: Promise<AgyPlanCatalog> | null = null
   let emitUsageUpdate: ((catalog: AgyPlanCatalog) => void) | undefined
+  let emitAgentsUpdate: ((sessionID: string) => void) | undefined
+
+  const resolveSessionConvId = async (sessionID: string): Promise<string | undefined> => {
+    if (!sessionID) return undefined
+    const cached = activeConversations.get(sessionID)
+    if (cached) return cached
+    const storedConv = await ctx.storage.get(`agy:conv:${sessionID}`).catch(() => undefined)
+    if (typeof storedConv === "string" && storedConv) {
+      activeConversations.set(sessionID, storedConv)
+      return storedConv
+    }
+    const toolConv = await ctx.storage.get(`agy:tool_conv:${sessionID}`).catch(() => undefined)
+    if (typeof toolConv === "string" && toolConv) {
+      return toolConv
+    }
+    return undefined
+  }
+
+  const buildAgentsJsonForSession = async (
+    sessionID: string,
+  ): Promise<{ readonly json: string; readonly fingerprint: string }> => {
+    const convId = await resolveSessionConvId(sessionID)
+    const dto = readAgyAgentsSnapshot({
+      sessionID,
+      conversationId: convId,
+      streamSubagents: liveStreamSubagents.get(sessionID),
+    })
+    const fingerprint = JSON.stringify({
+      conversationId: dto.conversationId ?? "",
+      swarm: dto.swarm,
+      subagents: dto.subagents,
+    })
+    return { json: JSON.stringify(dto), fingerprint }
+  }
 
   const refreshPlanCatalog = async (force = false): Promise<AgyPlanCatalog> => {
     if (!force && Date.now() - lastCatalogRefreshAt < 45_000 && currentCatalog.quotaGroups.length > 0) {
@@ -450,12 +530,30 @@ export async function registerAgyProvider(
             json: JSON.stringify(buildUsageSnapshotDto(catalog)),
           }
         },
+        getAgents: async (input) => {
+          const sid = typeof (input as { sessionID?: unknown } | undefined)?.sessionID === "string"
+            ? ((input as { sessionID: string }).sessionID ?? "").trim()
+            : ""
+          const { json, fingerprint } = await buildAgentsJsonForSession(sid)
+          if (sid) lastAgentsFingerprint.set(sid, fingerprint)
+          return { json }
+        },
       })
       disposers.push(registration)
       emitUsageUpdate = (catalog) => {
         void registration.events
           .emit("updated", {
             json: JSON.stringify(buildUsageSnapshotDto(catalog)),
+          })
+          .catch(() => {})
+      }
+      emitAgentsUpdate = (sessionID) => {
+        if (!sessionID) return
+        void buildAgentsJsonForSession(sessionID)
+          .then(({ json, fingerprint }) => {
+            if (lastAgentsFingerprint.get(sessionID) === fingerprint) return
+            lastAgentsFingerprint.set(sessionID, fingerprint)
+            return registration.events.emit("agentsUpdated", { sessionID, json })
           })
           .catch(() => {})
       }
@@ -634,6 +732,25 @@ export async function registerAgyProvider(
           return { stream: createInstantReportStream(report, syncUsage) }
         }
 
+        const pendingSwarm = isPrimary ? consumePendingSwarmRequest(sessionID) : false
+        const swarmCmd = isPrimary ? detectSwarmCommandInPrompt(options.prompt) : { matched: false }
+        if ((pendingSwarm || swarmCmd.matched) && !swarmCmd.task && swarmCmd.matched) {
+          return {
+            stream: createInstantReportStream(
+              "Provide a task after `/swarm <task>` to start an Antigravity swarm (for example: `/swarm Audit src/ and add unit tests`).",
+              toV3Usage(),
+            ),
+          }
+        }
+        if ((pendingSwarm || swarmCmd.matched) && !config.allowSwarm) {
+          return {
+            stream: createInstantReportStream(
+              'Antigravity swarm is disabled by plugin configuration (`"allowSwarm": false`). Set `"allowSwarm": true` in `opencode.jsonc` to enable `/swarm`.',
+              toV3Usage(),
+            ),
+          }
+        }
+
         const promptText = buildProviderPrompt({
           prompt: options.prompt,
           resumingConversation: Boolean(prevConvId),
@@ -651,15 +768,23 @@ export async function registerAgyProvider(
           void ctx.storage.set(`agy:agent:${sessionID}`, agent).catch(() => {})
         }
 
+        const isSwarmTurn =
+          config.allowSwarm &&
+          !readOnly &&
+          (pendingSwarm || swarmCmd.matched || hasActiveAgySwarm(prevConvId))
+        const effectiveTimeoutSeconds = isSwarmTurn ? config.swarmTimeoutSeconds : config.timeoutSeconds
+        const enableSlashCommands = config.enableSlashCommands || isSwarmTurn
+
         const env = buildSanitizedEnv()
         const agyBin = resolveAgyBinary(config.binaryPath, env)
         const args = buildStreamArgs({
           promptText,
           cliModel,
-          timeoutSeconds: config.timeoutSeconds,
+          timeoutSeconds: effectiveTimeoutSeconds,
           readOnly,
           mode: config.mode,
           allowAllTools: config.allowAllTools,
+          enableSlashCommands,
           prevConvId,
           responseSchema: options.responseFormat?.type === "json" ? options.responseFormat.schema : undefined,
         })
@@ -669,15 +794,46 @@ export async function registerAgyProvider(
           args,
           workspaceDir,
           env,
-          timeoutSeconds: config.timeoutSeconds,
+          timeoutSeconds: effectiveTimeoutSeconds,
           abortSignal: options.abortSignal,
           onConversationId: (convId) => {
             if (!convId || !isPrimary || !sessionID) return
+            const changed = activeConversations.get(sessionID) !== convId
             activeConversations.set(sessionID, convId)
             void ctx.storage.set(`agy:conv:${sessionID}`, convId).catch(() => {})
+            if (changed) emitAgentsUpdate?.(sessionID)
+          },
+          onSubagentStep: (stepIndex, state, subagents) => {
+            if (!isPrimary || !sessionID) return
+            const prev = liveStreamSubagents.get(sessionID) ?? []
+            const filtered = prev.filter((item) => item.spawnStepIndex !== stepIndex)
+            if (state !== "DONE") {
+              for (const raw of subagents) {
+                filtered.push({
+                  conversationId: typeof raw.conversation_id === "string" ? raw.conversation_id : undefined,
+                  typeName: typeof raw.type_name === "string" ? raw.type_name : "subagent",
+                  role: typeof raw.role === "string" ? raw.role : "Subagent",
+                  initialPrompt: typeof raw.initial_prompt === "string" ? raw.initial_prompt : undefined,
+                  workspaceUris: Array.isArray(raw.workspace_uris)
+                    ? raw.workspace_uris.filter((u): u is string => typeof u === "string")
+                    : undefined,
+                  spawnStepIndex: stepIndex,
+                })
+              }
+            }
+            liveStreamSubagents.set(sessionID, filtered)
+            emitAgentsUpdate?.(sessionID)
+          },
+          onSwarmOrAgentActivity: () => {
+            if (!isPrimary || !sessionID) return
+            emitAgentsUpdate?.(sessionID)
           },
           onTurnComplete: () => {
             if (!isPrimary) return
+            if (sessionID) {
+              liveStreamSubagents.delete(sessionID)
+              emitAgentsUpdate?.(sessionID)
+            }
             void refreshPlanCatalog(true).catch(() => {})
           },
         })

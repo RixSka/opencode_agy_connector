@@ -7,9 +7,9 @@ OpenCode v2 connector plugin that registers **Antigravity (`agy`)** as a first-c
 ## Features
 
 - **Standalone `agy/*` Model Provider:** Exposes 7 Antigravity model families and effort variants (`#low`, `#medium`, `#high`, `#xhigh`) natively inside OpenCode's model picker, `opencode mini -m`, and `opencode run -m`.
-- **Direct `/agy` Command:** Programmatically registered command that switches straight to `agy/gemini-4-hydrogen#medium` (configurable) without sending an intermediate turn to another provider.
+- **Direct `/agy` & `/swarm` Commands:** Programmatically registered `/agy <task>` switches straight to `agy/gemini-4-hydrogen#medium` (configurable), and `/swarm <task>` starts a native Antigravity multi-agent swarm (keeping slash-command expansion enabled and unbounded swarm timeouts by default) without sending an intermediate turn to another provider.
 - **Direct `/context` & `/usage` Inspectors (`agy/*`):** Run `/context` to inspect the real Antigravity context window, visual category breakdown, step-by-step token trajectory from `transcript.jsonl`, and live `/usage` quota buckets; or run `/usage` on any `agy/*` model to inspect your detected Antigravity plan tier, quota pools, local reset countdowns, and dynamically initialized plan models (`agy models`).
-- **Right-Sidebar Live Quota Widget (`./tui`):** Renders an **Antigravity Quota** panel in OpenCode's right sidebar (`sidebar.content`) with color-coded progress bars, remaining `%`, reset countdowns, clickable `[↻ Refresh]` button, `/agy-refresh` command, automatic refresh on completed turns, and background polling.
+- **Right-Sidebar Live Quota, Swarm & Subagents Widget (`./tui`):** Renders **Antigravity Quota** (progress bars, `%`, reset countdowns, `[↻ Refresh]`, `/agy-refresh`) plus live **Antigravity Swarm & Subagents** status in OpenCode's right sidebar (`sidebar.content`) — mirroring Antigravity's own telemetry (member/subagent status: `Active`/`Waiting`/`Done`/`Blocked · <tool>`/`Quota`/`Error`/`Killed`, model, current tool or thinking activity, step/token/post/unread counts, workspace mode, latest board post, and a clickable `[Board]` / `[Inspect]` / `/agy-swarm` inspector modal).
 - **Bundled `@agy` Skill:** Automatically loads [`skills/agy/SKILL.md`](./skills/agy/SKILL.md) into OpenCode when no user-defined override is present.
 - **Explicit `agy` Delegation Tool:** Lets non-Antigravity sessions offload heavy multi-file refactors, test generation, PDF inspection, or independent reviews to headless `agy -p`.
 - **Streaming Tools & Session Continuity:** Streams NDJSON tool calls (`providerExecuted: true`), forwards `AGENTS.md` + active OpenCode agent role prompts, stages binary/file attachments, generates titles without spawning extra LLM calls, enforces read-only constraints on `plan`/`reviewer`/`explore`, and resumes multi-turn sessions via `--conversation`.
@@ -76,8 +76,10 @@ Or with explicit options:
         "defaultModel": "gemini-4-hydrogen",
         "defaultVariant": "medium",
         "timeoutSeconds": 600,
+        "swarmTimeoutSeconds": 0,
         "mode": "accept-edits",
-        "allowAllTools": false
+        "allowAllTools": false,
+        "allowSwarm": true
       }
     }
   ]
@@ -150,7 +152,8 @@ opencode service restart
   ```
 - **Inside Full OpenCode TUI (`opencode`):**
   - Select any `agy/*` model via `/models`.
-  - Or run `/agy <task>` directly (switches the turn onto `agy/gemini-4-hydrogen#medium` immediately without calling another model).
+  - Run `/agy <task>` directly (switches the turn onto `agy/gemini-4-hydrogen#medium` immediately without calling another model).
+  - Run `/swarm <task>` to launch an Antigravity multi-agent swarm, watch live workers/subagents in the right sidebar, and run `/agy-swarm` (or click `[Board]` / `[Inspect]`) to view the full board posts and subagent transcripts.
 - **Standalone Antigravity Terminal CLI (No OpenCode):**
   ```bash
   agy

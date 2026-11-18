@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.0 - 2026-11-18
+
+### Added
+- Antigravity `/swarm` support: registered `/swarm <task>` command (`ctx.command.transform`), `allowSwarm` (default `true`), `swarmTimeoutSeconds` (default `0`, unbounded print timeout on swarm turns), and `enableSlashCommands` plugin options; kept `/swarm` leading in prompts and omitted `--disable-slash-commands` on `/swarm` and active-swarm turns (`hasActiveAgySwarm`).
+- Live streaming support for `step_type: "subagent"` NDJSON events (`invoke_subagent`) and real-time `agentsUpdated` / `getAgents` RPC telemetry on `AgyUsageRpc`.
+- Right-sidebar (`./tui`) **Swarm** and **Subagents** sections plus an interactive `[Board]` / `[Inspect]` / `/agy-swarm` modal displaying Antigravity's full roster & subagent info (`Active`, `Waiting`, `Done`, `Blocked · <tool>`, `Quota`, `Error`, `Stuck`, `Killed`), model, live tool/thinking activity, steps, context/output tokens, post/unread counts, workspace mode, recent board posts, and subagent prompts/replies (`src/subagents.ts`).
+
 ## 1.3.0 - 2026-11-16
 
 ### Added

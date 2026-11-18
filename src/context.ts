@@ -84,6 +84,7 @@ const SAFE_CONV_ID = /^[a-zA-Z0-9_-]{4,128}$/
 
 const pendingContextRequests = new Map<string, { readonly arg?: string }>()
 const pendingUsageRequests = new Set<string>()
+const pendingSwarmRequests = new Set<string>()
 
 /** Record an explicit `/context` invocation for a session before triggering `session.prompt`. */
 export function enqueuePendingContextRequest(sessionID: string, arg?: string): void {
@@ -112,6 +113,19 @@ export function enqueuePendingUsageRequest(sessionID: string): void {
 export function consumePendingUsageRequest(sessionID: string | undefined): boolean {
   if (!sessionID || !pendingUsageRequests.has(sessionID)) return false
   pendingUsageRequests.delete(sessionID)
+  return true
+}
+
+/** Record an explicit `/swarm` invocation for a session before triggering `session.prompt`. */
+export function enqueuePendingSwarmRequest(sessionID: string): void {
+  if (!sessionID) return
+  pendingSwarmRequests.add(sessionID)
+}
+
+/** Consume a pending `/swarm` request for a session if one was queued by the command handler. */
+export function consumePendingSwarmRequest(sessionID: string | undefined): boolean {
+  if (!sessionID || !pendingSwarmRequests.has(sessionID)) return false
+  pendingSwarmRequests.delete(sessionID)
   return true
 }
 

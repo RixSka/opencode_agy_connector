@@ -4,11 +4,14 @@ import tuiPlugin from "../src/tui.ts"
 
 test("tui plugin setup wires sidebar.content slot, startup retry, /agy-refresh command, and RPC events", async () => {
   const calls: Array<{ forceRefresh: boolean }> = []
+  const agentCalls: Array<{ sessionID: string }> = []
   let updatedHandler: ((event: { data: { json: string } }) => void) | undefined
+  let agentsUpdatedHandler: ((event: { data: { sessionID?: string; json: string } }) => void) | undefined
   let sidebarClaim: { append?: string; render?: (input: { sessionID: string }) => unknown } | undefined
   let appClaim: { append?: string; render?: () => unknown } | undefined
   const registeredCommands: Array<{ id?: string; run?: () => void }> = []
   const toasts: Array<{ title?: string; message?: string; variant?: string }> = []
+  let dialogShown = false
 
   const makeSnapshot = (pct: number) =>
     JSON.stringify({
@@ -56,11 +59,24 @@ test("tui plugin setup wires sidebar.content slot, startup retry, /agy-refresh c
           }
           return { json: makeSnapshot(input.forceRefresh ? 58 : 62) }
         },
+        getAgents: async (input: { sessionID: string }) => {
+          agentCalls.push(input)
+          return {
+            json: JSON.stringify({
+              sessionID: input.sessionID,
+              swarm: null,
+              subagents: [],
+              updatedAt: "2026-11-18T20:05:00Z",
+            }),
+          }
+        },
         events: {
-          on: (name: string, fn: (event: { data: { json: string } }) => void) => {
+          on: (name: string, fn: (event: { data: { sessionID?: string; json: string } }) => void) => {
             if (name === "updated") updatedHandler = fn
+            if (name === "agentsUpdated") agentsUpdatedHandler = fn
             return () => {
-              updatedHandler = undefined
+              if (name === "updated") updatedHandler = undefined
+              if (name === "agentsUpdated") agentsUpdatedHandler = undefined
             }
           },
         },
@@ -73,6 +89,16 @@ test("tui plugin setup wires sidebar.content slot, startup retry, /agy-refresh c
       },
     },
     ui: {
+      router: {
+        current: () => ({ type: "session", sessionID: "ses_live_1" }),
+      },
+      dialog: {
+        set: () => {},
+        show: () => {
+          dialogShown = true
+        },
+        clear: () => {},
+      },
       toast: {
         show: (toast: { title?: string; message?: string; variant?: string }) => toasts.push(toast),
       },
@@ -89,6 +115,7 @@ test("tui plugin setup wires sidebar.content slot, startup retry, /agy-refresh c
     assert.ok(sidebarClaim?.render)
     appClaim?.render?.()
     assert.equal(registeredCommands[0]?.id, "agy.usage.refresh")
+    assert.equal(registeredCommands[1]?.id, "agy.swarm.board")
 
     // Initial RPC call attempted immediately on boot
     await new Promise((r) => setTimeout(r, 20))
@@ -99,6 +126,8 @@ test("tui plugin setup wires sidebar.content slot, startup retry, /agy-refresh c
     await new Promise((r) => setTimeout(r, 1700))
     assert.equal(calls.length, 2)
     assert.equal(calls[1]?.forceRefresh, false)
+    assert.ok(agentCalls.length >= 1)
+    assert.equal(agentCalls[0]?.sessionID, "ses_live_1")
 
     // Manual refresh command calls RPC with forceRefresh: true and shows toast
     registeredCommands[0]?.run?.()
@@ -108,10 +137,16 @@ test("tui plugin setup wires sidebar.content slot, startup retry, /agy-refresh c
     assert.equal(toasts.length, 1)
     assert.match(toasts[0]?.message ?? "", /2 bucket/)
 
-    // Event listener stays subscribed until cleanup runs
+    // /agy-swarm command opens the Swarm & Subagents inspector modal
+    registeredCommands[1]?.run?.()
+    assert.equal(dialogShown, true)
+
+    // Event listeners stay subscribed until cleanup runs
     assert.ok(updatedHandler)
+    assert.ok(agentsUpdatedHandler)
   } finally {
     if (typeof cleanup === "function") await cleanup()
     assert.equal(updatedHandler, undefined)
+    assert.equal(agentsUpdatedHandler, undefined)
   }
 })

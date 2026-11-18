@@ -3,6 +3,7 @@ import { Skill, type Plugin } from "@opencode/plugin"
 import {
   buildAgyContextReport,
   enqueuePendingContextRequest,
+  enqueuePendingSwarmRequest,
   enqueuePendingUsageRequest,
 } from "./context.ts"
 import { buildSanitizedEnv, resolveAgyBinary } from "./env.ts"
@@ -143,6 +144,35 @@ export async function registerPluginAssets(
           })
         },
       })
+
+      if (config.allowSwarm) {
+        editor.add({
+          name: "swarm",
+          description: `Run an Antigravity swarm (parallel workers + shared board) on ${PROVIDER_ID}/*`,
+          execute: async ({ sessionID, prompt, delivery }) => {
+            const session = await ctx.session.get({ sessionID })
+            if (session.model?.providerID !== PROVIDER_ID) {
+              await ctx.session.switchModel({
+                sessionID,
+                model: {
+                  providerID: PROVIDER_ID,
+                  id: config.defaultModel,
+                  ...(config.defaultVariant ? { variant: config.defaultVariant } : {}),
+                },
+              })
+            }
+
+            const rawTask = (prompt.text ?? "").replace(/^\/(?:agy[-_:])?swarm\b/i, "").trim()
+            enqueuePendingSwarmRequest(sessionID)
+            await ctx.session.prompt({
+              ...prompt,
+              text: rawTask ? `/swarm ${rawTask}` : "/swarm",
+              sessionID,
+              delivery,
+            })
+          },
+        })
+      }
     })
   }
 }

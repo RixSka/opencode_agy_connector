@@ -54,8 +54,8 @@ Headless mode cannot answer interactive confirmation prompts; any unpermitted to
 - **Full tool execution (only when explicitly appropriate):**
   Only pass `allow_all_tools: true` (`--dangerously-skip-permissions`) when the delegated task requires running shell commands outside `permissions.allow`, and only when safe for the workspace. Never instruct `agy` to run destructive or remote-mutating commands (`git push`, `rm -rf`, etc.) unless the user explicitly asked for them.
 - **Timeouts & slash expansion:**
-  - Leave `timeout_seconds` at the `600` default (or `--print-timeout 600s`, or `0s` for unbounded) — avoid short timeouts like `30s`, because high-effort reasoning spends time before outputting text.
-  - Pass `disable_slash_commands: true` (`--disable-slash-commands`) if the prompt contains literal `/...` tokens that should not be expanded.
+  - Leave `timeout_seconds` at the `600` default (or `--print-timeout 600s`, or `0s` for unbounded / swarm runs) — avoid short timeouts like `30s`, because high-effort reasoning or multi-worker swarms take time before outputting final text.
+  - Pass `disable_slash_commands: true` (`--disable-slash-commands`) if the prompt contains literal `/...` tokens that should not be expanded (omit it when invoking `/swarm <task>`).
 
 ### 3. Pass Completely Self-Contained Prompts
 

@@ -128,6 +128,11 @@ export async function registerAgyTool(
         }
 
         const parsed = parseAgyOutput(execResult.stdout, execResult.stderr)
+        const toolSessionId = (context as { readonly sessionID?: string } | undefined)?.sessionID
+        if (parsed.result?.conversation_id && toolSessionId) {
+          void ctx.storage.set(`agy:tool_conv:${toolSessionId}`, parsed.result.conversation_id).catch(() => {})
+        }
+
         const failed =
           execResult.timedOut ||
           execResult.code !== 0 ||

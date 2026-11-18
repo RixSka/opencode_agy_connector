@@ -4,9 +4,11 @@ import {
   buildInstantTitle,
   buildProviderPrompt,
   detectContextCommandInPrompt,
+  detectSwarmCommandInPrompt,
   detectUsageCommandInPrompt,
   extractRelevantInstructions,
   parseContextCommand,
+  parseSwarmCommand,
   parseUsageCommand,
   renderMessageContent,
 } from "../src/prompt.ts"
@@ -153,4 +155,33 @@ test("buildProviderPrompt strips diagnostic /context turns and redundant compact
   })
 
   assert.equal(resumed, "Actual follow-up question")
+})
+
+test("parseSwarmCommand and buildProviderPrompt keep /swarm leading before instructions", () => {
+  assert.deepEqual(parseSwarmCommand("/swarm Audit auth and write tests"), {
+    matched: true,
+    task: "Audit auth and write tests",
+  })
+  assert.deepEqual(parseSwarmCommand("/agy-swarm"), { matched: true })
+  assert.deepEqual(parseSwarmCommand("Explain /swarm"), { matched: false })
+
+  const detected = detectSwarmCommandInPrompt([
+    { role: "user", content: "/swarm Refactor parser" },
+  ])
+  assert.deepEqual(detected, { matched: true, task: "Refactor parser" })
+
+  const promptText = buildProviderPrompt({
+    prompt: [{ role: "user", content: "/agy-swarm Split into workers" }],
+    resumingConversation: false,
+    meta: {
+      sessionID: "ses_swarm",
+      agent: "build",
+      kind: "primary",
+      instructions: "Run tests before finishing.",
+    },
+    agentChanged: false,
+    readOnly: false,
+  })
+  assert.ok(promptText.startsWith("/swarm Split into workers"))
+  assert.match(promptText, /<workspace_and_role_instructions>\nRun tests before finishing\./)
 })

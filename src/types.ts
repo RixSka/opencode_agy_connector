@@ -98,8 +98,11 @@ export interface AgyConnectorConfig {
   readonly defaultVariant?: string
   readonly defaultToolModel: string
   readonly timeoutSeconds: number
+  readonly swarmTimeoutSeconds: number
   readonly mode: AgyExecutionMode
   readonly allowAllTools: boolean
+  readonly allowSwarm: boolean
+  readonly enableSlashCommands: boolean
   readonly readOnlyAgents: ReadonlySet<string>
   readonly registerProvider: boolean
   readonly registerTool: boolean
@@ -203,6 +206,11 @@ export function parseConnectorConfig(rawOptions: Record<string, unknown> | undef
       ? Math.max(0, Math.floor(opts.timeoutSeconds))
       : DEFAULT_TIMEOUT_SECONDS
 
+  const swarmTimeoutSeconds =
+    typeof opts.swarmTimeoutSeconds === "number" && Number.isFinite(opts.swarmTimeoutSeconds)
+      ? Math.max(0, Math.floor(opts.swarmTimeoutSeconds))
+      : 0
+
   const rawMode = typeof opts.mode === "string" ? opts.mode.trim() : ""
   const mode: AgyExecutionMode =
     rawMode === "auto" || rawMode === "plan" || rawMode === "accept-edits" ? rawMode : "accept-edits"
@@ -222,8 +230,11 @@ export function parseConnectorConfig(rawOptions: Record<string, unknown> | undef
     defaultVariant,
     defaultToolModel,
     timeoutSeconds,
+    swarmTimeoutSeconds,
     mode,
     allowAllTools: opts.allowAllTools === true,
+    allowSwarm: opts.allowSwarm !== false,
+    enableSlashCommands: opts.enableSlashCommands === true,
     readOnlyAgents,
     registerProvider: opts.registerProvider !== false,
     registerTool: opts.registerTool !== false,

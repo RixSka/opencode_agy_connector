@@ -204,6 +204,36 @@ export function detectUsageCommandInPrompt(prompt: readonly unknown[]): { readon
   return { matched: false }
 }
 
+/** Check whether a rendered user message text is an explicit `/swarm` command. */
+export function parseSwarmCommand(text: string): { readonly matched: boolean; readonly task?: string } {
+  const cleaned = stripDcpMessageRefs(text)
+  const unwrapped = (/<message>\s*([\s\S]*?)\s*<\/message>/i.exec(cleaned)?.[1] ?? cleaned).trim()
+  const match = /^\/(?:agy[-_:])?swarm(?:\s+([\s\S]*))?$/i.exec(unwrapped)
+  if (!match) return { matched: false }
+  const task = match[1]?.trim()
+  return { matched: true, ...(task ? { task } : {}) }
+}
+
+/** Detect if the latest user turn in an AI SDK prompt starts with a `/swarm` command. */
+export function detectSwarmCommandInPrompt(prompt: readonly unknown[]): {
+  readonly matched: boolean
+  readonly task?: string
+} {
+  const messages = prompt.filter(
+    (entry): entry is Record<string, unknown> =>
+      Boolean(entry && typeof entry === "object" && (entry as Record<string, unknown>).role !== "system"),
+  )
+  const lastAssistantIdx = findLastAssistantIndex(messages)
+  const trailingUsers = messages.slice(lastAssistantIdx + 1)
+  for (let i = trailingUsers.length - 1; i >= 0; i--) {
+    const rendered = stripDcpMessageRefs(renderMessageContent(trailingUsers[i]?.content, false))
+    if (!rendered || rendered.startsWith("<system-reminder>")) continue
+    const parsed = parseSwarmCommand(rendered)
+    if (parsed.matched) return parsed
+  }
+  return { matched: false }
+}
+
 function isDiagnosticTurnMessage(message: Record<string, unknown>): boolean {
   const rendered = stripDcpMessageRefs(renderMessageContent(message.content, false))
   if (!rendered) return false
@@ -266,6 +296,11 @@ export function buildProviderPrompt(params: {
         `[Read-only mode active for OpenCode agent "${meta?.agent ?? "plan"}": do NOT edit, create, or delete files, and return your full response directly as text.]`,
       )
     }
+    const swarmLeading = !readOnly && parseSwarmCommand(latestText).matched
+    if (swarmLeading) {
+      const normalized = latestText.replace(/^\/(?:agy[-_:])?swarm\b/i, "/swarm")
+      return [normalized, ...prefixes].join("\n\n").slice(0, MAX_PROMPT_CHARS)
+    }
     return [...prefixes, latestText].join("\n\n").slice(0, MAX_PROMPT_CHARS)
   }
 
@@ -322,7 +357,14 @@ export function buildProviderPrompt(params: {
     .trim()
 
   if (!currentText && sections.length === 0) return ""
-  if (currentText) sections.push(currentText)
+  if (currentText) {
+    // Keep `/swarm` at the very start of the prompt so `agy -p` expands the swarm skill.
+    if (!readOnly && parseSwarmCommand(currentText).matched) {
+      const normalized = currentText.replace(/^\/(?:agy[-_:])?swarm\b/i, "/swarm")
+      return [normalized, ...sections].join("\n\n").slice(0, MAX_PROMPT_CHARS)
+    }
+    sections.push(currentText)
+  }
 
   return sections.join("\n\n").slice(0, MAX_PROMPT_CHARS)
 }
